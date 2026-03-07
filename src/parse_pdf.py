@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 
 from langchain_community.document_loaders import PyMuPDFLoader
+import fitz
 
 
 def clean_text(text):
@@ -14,17 +15,7 @@ def clean_text(text):
     # - remove repeated spaces
     # - reduce excessive blank lines
     # - strip leading/trailing whitespace
-    pass
-
-
-def extract_page_text(page):
-    # Extract raw text from one PDF page.
-    #
-    # You can start with page.get_text("text").
-    # Later, if needed, you can test other extraction modes.
-    #
-    # Return cleaned page text.
-    pass
+    return text
 
 
 def parse_pdf(pdf_path):
@@ -50,24 +41,28 @@ def parse_pdf(pdf_path):
 
 def parse_pdf_with_metadata(pdf_path):
     # Parse one PDF and also keep document-level metadata.
-    #
-    # In addition to page records, collect things like:
-    # - source file name
-    # - full source path
-    # - number of pages
-    # - built-in PDF metadata from the document
-    #
-    # Suggested return format:
-    # {
-    #     "source_file": ...,
-    #     "source_path": ...,
-    #     "num_pages": ...,
-    #     "pdf_metadata": ...,
-    #     "pages": [...]
-    # }
-    loader = PyMuPDFLoader(pdf_path)
-    data = loader.load_and_split()
-    return []
+
+    with fitz.open(pdf_path) as doc:
+        metadata = doc.metadata or {}
+        pages = []
+
+        for page_index in range(len(doc)):
+            page = doc.load_page(page_index)
+            page_text = clean_text(page.get_text("text"))
+
+            pages.append({
+                "source_file": pdf_path.name,
+                "page_num": page_index + 1,
+                "text": page_text,
+            })
+
+    return [{
+        "source_file": pdf_path.name,
+        "source_path": str(pdf_path),
+        "num_pages": len(pages),
+        "pdf_metadata": metadata,
+        "pages": pages,
+    }]
 
 
 def parse_pdf_folder(folder_path, suffix="*.pdf"):
@@ -116,5 +111,5 @@ if __name__ == "__main__":
     # This block is only for manual testing, not core pipeline use.
     folder_path = 'data/raw/'
     files = parse_pdf_folder(folder_path)
-    print(files)
+    print(files[0]['pages'][0]['text'])
     pass
