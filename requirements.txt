@@ -1,0 +1,10 @@
+langchain
+langchain_community
+faiss-cpu
+sentence-transformers
+pandas
+numpy
+scikit-learn
+torch
+matplotlib
+pymupdf
