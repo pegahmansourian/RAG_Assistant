@@ -15,7 +15,22 @@ def clean_text(text):
     # - remove repeated spaces
     # - reduce excessive blank lines
     # - strip leading/trailing whitespace
-    return text
+    if not text:
+        return ""
+
+    # Normalize line endings
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Remove excessive spaces
+    text = re.sub(r"[ \t]+", " ", text)
+
+    # Remove excessive blank lines
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    # Correct "fi" misreading
+    text = re.sub("ﬁ", "fi", text)
+
+    return text.strip()
 
 
 def parse_pdf(pdf_path):
