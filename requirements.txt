@@ -1,4 +1,6 @@
 langchain
+langchain-core
+langchain-text-splitters
 langchain_community
 faiss-cpu
 sentence-transformers
