@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from langchain_community.document_loaders import PyMuPDFLoader
-from config import ROOT_DIR, SUPPORTED_PDF_GLOB
+from .config import ROOT_DIR, SUPPORTED_PDF_GLOB
 
 
 def parse_pdf(pdf_path):

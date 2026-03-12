@@ -2,6 +2,8 @@ langchain
 langchain-core
 langchain-text-splitters
 langchain_community
+langchain_huggingface
+langchain-cohere
 faiss-cpu
 sentence-transformers
 pandas
@@ -10,3 +12,4 @@ scikit-learn
 torch
 matplotlib
 pymupdf
+cohere

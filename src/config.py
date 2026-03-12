@@ -18,7 +18,31 @@ EVAL_RESULTS_DIR = OUTPUTS_DIR / "eval_results"
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 100
 
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODELS = {
+    "miniLM": {
+        "provider": "huggingface",
+        "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+    },
+    "mpnet": {
+        "provider": "huggingface",
+        "model_name": "sentence-transformers/all-mpnet-base-v2",
+    },
+    "bge_base": {
+        "provider": "huggingface",
+        "model_name": "BAAI/bge-base-en-v1.5",
+    },
+    "cohere_v3": {
+        "provider": "cohere",
+        "model_name": "embed-english-v3.0",
+    },
+    "cohere_v4": {
+        "provider": "cohere",
+        "model_name": "embed-v4.0",
+    },
+}
+
+DEFAULT_EMBEDDING_KEY = "miniLM"
+
 VECTORSTORE_NAME = "faiss"
 
 RETRIEVAL_K = 5

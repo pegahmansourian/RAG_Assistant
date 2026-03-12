@@ -1,35 +1,36 @@
 from pathlib import Path
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from config import CHUNK_SIZE, CHUNK_OVERLAP
+from .config import CHUNK_SIZE, CHUNK_OVERLAP
 import json
 import re
+from .loaders import parse_pdf_folder
 
 
-def split_into_paragraphs(text):
-    # Split page text into paragraph-like units.
-
-    if not text:
-        return []
-
+def create_splitter():
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
         length_function=len
     )
 
-    chunks = text_splitter.split_text(text)
+    return text_splitter
+
+def split_text(docs):
+    # Split page text into paragraph-like units.
+
+    if not docs:
+        return []
+
+    splitter = create_splitter()
+    chunks = splitter.split_documents(docs)
 
     return chunks
-
 
 
 if __name__ == "__main__":
     # Use this block for quick manual testing.
     #
-    # Suggested flow:
-    # 1. load a parsed JSON file from data/processed/
-    # 2. extract page records
-    # 3. chunk them
-    # 4. save chunked output back to data/processed/
-    # 5. print number of created chunks
+    folder_path = 'data/raw/'
+    files = parse_pdf_folder(folder_path)
+    chunks = split_text(files)
     pass
