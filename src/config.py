@@ -1,4 +1,5 @@
 from pathlib import Path
+from dotenv import load_dotenv
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -42,6 +43,31 @@ EMBEDDING_MODELS = {
 }
 
 DEFAULT_EMBEDDING_KEY = "miniLM"
+
+LLM_MODELS = {
+    "miniLM": {
+        "provider": "openai",
+        "model_name": "gpt-4o-mini",
+    },
+    "cohere": {
+        "provider": "cohere",
+        "model_name": "command-a-03-2025",
+    },
+    "mistral": {
+        "provider": "ollama",
+        "model_name": "mistral",
+    },
+    "llama3": {
+        "provider": "ollama",
+        "model_name": "llama3",
+    },
+    "qwen3": {
+        "provider": "ollama",
+        "model_name": "qwen3",
+    },
+}
+
+DEFAULT_LLM_KEY = "mistral"
 
 VECTORSTORE_NAME = "faiss"
 
