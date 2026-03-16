@@ -74,13 +74,14 @@ if st.session_state.retriever is None or rebuild_index:
 
 query = st.text_area(
     "Enter your question",
-    placeholder="Example: What are common defenses against prompt injection in RAG systems?"
+    placeholder="Example: What are common attacks in CAVs?"
 )
 
 ask_button = st.button("Ask")
 
 if ask_button and query.strip():
-    llm = build_llm(llm_key)
+    with st.spinner("Preparing LLM model..."):
+        llm = build_llm(llm_key)
 
     with st.spinner("Retrieving documents and generating answer..."):
         result = run_rag(
@@ -96,14 +97,16 @@ if ask_button and query.strip():
         st.subheader("Sources")
         for source in result["sources"]:
             st.write(
-                f"- {source.get('source_file', 'unknown')} | "
-                f"page {source.get('page_num', 'unknown')}"
+                f"- {source.get('title', 'unknown')} | "
+                f"by {source.get('author', 'unknown')} | "
+                f"page {source.get('page', 'unknown')}"
             )
 
     st.subheader("Retrieved Chunks")
     for i, doc in enumerate(result["retrieved_documents"], start=1):
         with st.expander(
-            f"Chunk {i} | {doc.metadata.get('source_file', 'unknown')} | "
-            f"page {doc.metadata.get('page_num', 'unknown')}"
+            f"Chunk {i} | {doc.metadata.get('title', 'unknown')} | "
+            f"Author: {doc.metadata.get('author', 'unknown')} |"
+            f"page {doc.metadata.get('page', 'unknown')}"
         ):
             st.write(doc.page_content)
