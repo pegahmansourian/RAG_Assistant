@@ -23,6 +23,8 @@ def split_text(docs):
 
     splitter = create_splitter()
     chunks = splitter.split_documents(docs)
+    for chunk in chunks:
+        chunk.metadata["page"] = chunk.metadata["page"] + 1
 
     return chunks
 

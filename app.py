@@ -6,10 +6,9 @@ from src.embeddings import build_embedding_model
 from src.vectorstore import build_database, load_faiss_index, save_faiss_index
 from src.retriever import build_similarity_retriever
 from src.rag_chain import run_rag
-from src.config import RAW_PDF_DIR
+from src.config import RAW_PDF_DIR, RERANK_BASE_K, RERANK_TOP_N, RETRIEVAL_K
 from src.llms import build_llm
-
-from langchain_openai import ChatOpenAI
+from src.reranking import build_rerank_retriever
 
 
 st.set_page_config(page_title="Technical PDF RAG Assistant", layout="wide")
@@ -29,6 +28,8 @@ llm_key = st.sidebar.selectbox(
     options=["mistral", "miniLM", "cohere", "llama3", "qwen3"]
 )
 
+use_reranker = st.sidebar.checkbox("Use reranker", value=False)
+
 index_name = st.sidebar.text_input(
     "Index name",
     value=f"faiss_{embedding_key}"
@@ -41,6 +42,9 @@ if "vectorstore" not in st.session_state:
 
 if "retriever" not in st.session_state:
     st.session_state.retriever = None
+
+if "use_reranker" not in st.session_state:
+    st.session_state.use_reranker = None
 
 
 def initialize_pipeline():
@@ -62,10 +66,15 @@ def initialize_pipeline():
             vectorstore = build_database(chunked_documents, embedding_model)
             save_faiss_index(vectorstore, index_name)
 
-    retriever = build_similarity_retriever(vectorstore)
+    if use_reranker:
+        base_retriever = build_similarity_retriever(vectorstore, k=RERANK_BASE_K)
+        retriever = build_rerank_retriever(base_retriever, top_n=RERANK_TOP_N)
+    else:
+        retriever = build_similarity_retriever(vectorstore, RETRIEVAL_K)
 
     st.session_state.vectorstore = vectorstore
     st.session_state.retriever = retriever
+    st.session_state.use_reranker = use_reranker
 
 
 if st.session_state.retriever is None or rebuild_index:
