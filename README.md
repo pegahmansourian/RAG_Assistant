@@ -40,7 +40,7 @@ This project aims to:
 
 A user asks:
 
-> What are common defenses against prompt injection in RAG systems?
+> What are common attacks on CAV networks?
 
 The assistant should:
 
@@ -57,43 +57,33 @@ The assistant should:
 ```text
 rag-pdf-assistant/
 │
-├── app.py
 ├── data/
-│   ├── raw_pdfs/
+│   ├── eval/
 │   ├── processed/
-│   └── eval/
-│
+│   └── raw/
 ├── notebooks/
-│   ├── 01_parse_and_inspect.ipynb
-│   ├── 02_chunk_and_index.ipynb
-│   ├── 03_retrieval_experiments.ipynb
-│   └── 04_evaluation.ipynb
-│
+│   ├── Evaluation.ipynb
+│   └── RAG Test.ipynb
 ├── outputs/
 │   ├── indexes/
-│   ├── logs/
-│   ├── samples/
-│   └── eval_results/
-│
+│   └── experiments/
 ├── src/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── loaders.py
-│   ├── preprocessing.py
 │   ├── chunking.py
+│   ├── config.py
 │   ├── embeddings.py
-│   ├── vectorstore.py
-│   ├── retrievers.py
-│   ├── reranking.py
-│   ├── llms.py
-│   ├── prompts.py
-│   ├── rag_chain.py
 │   ├── evaluation.py
-│   └── utils.py
+│   ├── llms.py
+│   ├── loaders.py
+│   ├── pdf_cleaning.py
+│   ├── preprocessing.py
+│   ├── rag_chain.py
+│   ├── reranking.py
+│   ├── retriever.py
+│   └── vectorstore.py
 │
-├── .env.example
-├── .gitignore
-├── requirements.txt
+├── app.py
+├── eval_dashboard.py
+├── experiment.py
 └── README.md
 ```
 
@@ -111,6 +101,28 @@ Responsibilities:
 - accept user questions
 - display grounded answers and retrieved chunks
 
+
+### `experiment.py`
+
+Script for running structured experiments over the RAG pipeline using config files and MLflow tracking.
+
+Typical responsibilities:
+- load experiment config
+- build retrieval/generation pipeline
+- run evaluation over a labeled eval set
+- compute retrieval metrics
+- log params, metrics, and artifacts to MLflow
+
+### `eval_dashboard.py`
+
+Dashboard script for inspecting evaluation results and comparing experiment outputs.
+
+---
+
+### `outputs/`
+
+Stores generated artifacts such as saved indexes, evaluation outputs, logs, and experiment results.
+
 ---
 
 ### `data/`
@@ -120,19 +132,9 @@ Stores project inputs and evaluation assets.
 #### `data/raw_pdfs/`
 Contains the original PDF files used as the document corpus.
 
-Examples:
-- RAG papers
-- LLM safety papers
-- ML security papers
-- technical architecture documents
-
 #### `data/processed/`
 Stores optional intermediate artifacts generated during development.
 
-Examples:
-- serialized parsed documents
-- chunk inspection files
-- intermediate preprocessing outputs
 
 #### `data/eval/`
 Stores evaluation datasets.
@@ -140,26 +142,18 @@ Stores evaluation datasets.
 Examples:
 - benchmark questions
 - expected sources
-- expected keywords
-- relevance labels
 
 ---
 
 ### `notebooks/`
 
-Contains exploratory notebooks for step-by-step development and analysis.
+Contains notebooks for experimentation, debugging, and evaluation.
 
-#### `01_parse_and_inspect.ipynb`
-Used to inspect raw PDF loading quality and metadata preservation.
+#### `RAG_Test.ipynb`
+Used for interactive testing of the RAG pipeline, including document loading, chunking, indexing, retrieval, and answer generation.
 
-#### `02_chunk_and_index.ipynb`
-Used to test chunking and vector indexing.
-
-#### `03_retrieval_experiments.ipynb`
-Used to compare retrieval strategies and embedding models.
-
-#### `04_evaluation.ipynb`
-Used to inspect retrieval and answer-quality evaluation results.
+#### `Evaluation.ipynb`
+Used to inspect retrieval and answer-quality evaluation results, test metrics, and analyze experiment outputs.
 
 ---
 
@@ -235,18 +229,11 @@ Responsibilities:
 - save indexes locally
 - reload indexes for reuse
 
-#### `retrievers.py`
-Defines retrieval strategies.
-
-Responsibilities:
-- build similarity retrievers
-- build MMR retrievers
-- execute retrieval for a query
 
 #### `reranking.py`
 Reserved for second-stage reranking.
 
-Possible future responsibilities:
+Possible responsibilities:
 - rerank top retrieved chunks
 - improve retrieval ordering with a cross-encoder or reranker model
 
@@ -284,14 +271,15 @@ Responsibilities:
 - compare outputs to expected references
 - compute retrieval and answer-quality metrics
 
-#### `utils.py`
-Contains shared helper functions.
+#### `retriever.py`
 
-Examples:
-- JSON helpers
-- metadata formatting
-- path utilities
-- logging helpers
+Defines the retrieval logic for the system.
+
+Typical responsibilities:
+- build similarity retriever
+- support retrieval configuration
+- return top-k relevant chunks for a query
+
 
 ---
 
@@ -323,7 +311,7 @@ The project is designed to support multiple retrieval setups.
 ### Variants
 - MMR retrieval
 - alternative embedding models
-- future reranking
+- reranking
 - future hybrid retrieval
 
 This structure makes it easy to compare retrieval quality systematically instead of relying only on manual inspection.
@@ -370,6 +358,7 @@ Core technologies used in this project include:
 - Streamlit
 - pandas / numpy / scikit-learn
 - local or API-based LLM backends
+- MLflow for experiment tracking
 
 ---
 
@@ -414,16 +403,33 @@ This launches the Streamlit interface for querying the indexed PDF collection.
 
 ---
 
+## Running Experiments
+
+Example experiment run:
+
+```bash
+python run_experiment.py --config configs/exp_reranker.yaml
+```
+
+To inspect tracked runs locally with MLflow:
+
+```bash
+mlflow ui
+```
+
+Then open `http://localhost:5000` in your browser.
+
+---
+
 ## Typical Development Workflow
 
-1. Add PDFs to `data/raw_pdfs/`
-2. Test loading and chunking in notebooks
-3. Build embeddings and vector store
-4. Test retrieval quality
-5. Run the RAG chain end to end
-6. Launch the Streamlit app
-7. Run evaluation experiments
-8. Compare embeddings and retrieval settings
+1. Add PDFs to the project data location
+2. Build embeddings and vector store
+3. Test retrieval quality
+4. Run the RAG pipeline end to end
+5. Launch the Streamlit app with `app.py`
+6. Run `experiment.py` for reproducible evaluation and MLflow tracking
+7. Use `eval_dashboard.py` to inspect and compare evaluation outputs
 
 ---
 
@@ -434,7 +440,7 @@ This structure is designed to support both learning and professional presentatio
 - `src/` contains reusable application logic
 - `data/` holds inputs and evaluation assets
 - `outputs/` stores generated artifacts
-- `notebooks/` support experimentation
+- `notebooks/` support experimentation and evaluation
 - `app.py` provides a demo interface
 - `config.py` keeps the system configurable
 - `evaluation.py` makes the project measurable
@@ -448,10 +454,8 @@ This makes the project easier to debug, extend, compare experimentally, and pres
 Potential extensions include:
 
 - hybrid retrieval with BM25 + dense search
-- reranking with a cross-encoder
-- richer source formatting in the UI
+- stronger reranking with a cross-encoder
 - upload support in the app
-- metadata filtering
 - OCR support for scanned PDFs
 - AWS-aligned deployment architecture
 - automatic answer grading
@@ -464,3 +468,8 @@ Potential extensions include:
 **Pegah Mansourian**  
 Applied ML / AI researcher focused on trustworthy AI, anomaly detection, and security-oriented machine learning systems.
 
+---
+
+## Note
+
+ChatGPT AI tools were used as a development aid for code debugging and documentation support. The project structure, implementation, experimentation, and final validation were completed by the author.
