@@ -1,5 +1,7 @@
 data/
 .idea/
 outputs/
+mlruns/
 src/__pycache__/
 .env
+mlflow.db

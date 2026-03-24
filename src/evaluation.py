@@ -65,6 +65,10 @@ def source_matches(retrieved_source, expected_source):
 
 
 def compute_hit_at_k(retrieved_sources, expected_sources):
+    # This checks:
+    # “Did I retrieve at least one correct source in the top k results?”
+    # If any retrieved source matches any expected source, it returns 1
+
     for expected_source in expected_sources:
         for retrieved_source in retrieved_sources:
             if source_matches(retrieved_source, expected_source):
@@ -73,6 +77,10 @@ def compute_hit_at_k(retrieved_sources, expected_sources):
 
 
 def compute_recall_at_k(retrieved_sources, expected_sources):
+    # This checks:
+    # “Out of all expected relevant sources, how many did I retrieve?”
+    # So this is a fraction, not just yes/no.
+
     if not expected_sources:
         return 0.0
 

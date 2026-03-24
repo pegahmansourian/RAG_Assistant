@@ -17,3 +17,4 @@ torch
 matplotlib
 streamlit
 dotenv
+mlflow
