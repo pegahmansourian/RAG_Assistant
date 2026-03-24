@@ -1,0 +1,18 @@
+experiment_name: base
+
+# data
+eval_set: data/eval/Evaluation_QA_2.json
+
+# indexing / chunking
+embedding_model: bge_base
+chunk_size: 800
+chunk_overlap: 100
+
+# retrieval
+retriever_k: 5
+use_reranker: false
+rerank_base_k: 10
+rerank_top_n: 3
+
+# generation
+llm: mistral

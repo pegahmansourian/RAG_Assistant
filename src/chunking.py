@@ -6,23 +6,25 @@ import re
 from .loaders import parse_pdf_folder
 
 
-def create_splitter():
+def create_splitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
         length_function=len
     )
 
     return text_splitter
 
-def split_text(docs):
+def split_text(docs, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
     # Split page text into paragraph-like units.
 
     if not docs:
         return []
 
-    splitter = create_splitter()
+    splitter = create_splitter(chunk_size, chunk_overlap)
     chunks = splitter.split_documents(docs)
+    for chunk in chunks:
+        chunk.metadata["page"] = chunk.metadata["page"] + 1
 
     return chunks
 

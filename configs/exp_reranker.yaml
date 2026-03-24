@@ -1,0 +1,4 @@
+experiment_name: exp_reranker
+use_reranker: true
+rerank_base_k: 10
+rerank_top_n: 3

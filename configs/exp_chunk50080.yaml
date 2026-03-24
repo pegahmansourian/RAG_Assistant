@@ -1,0 +1,4 @@
+experiment_name: exp_chunk50080
+chunk_size: 500
+chunk_overlap: 80
+use_reranker: false

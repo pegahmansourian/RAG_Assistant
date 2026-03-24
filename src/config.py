@@ -16,8 +16,8 @@ SAMPLES_DIR = OUTPUTS_DIR / "samples"
 EVAL_RESULTS_DIR = OUTPUTS_DIR / "eval_results"
 
 
-CHUNK_SIZE = 2000
-CHUNK_OVERLAP = 200
+CHUNK_SIZE = 500
+CHUNK_OVERLAP = 50
 
 EMBEDDING_MODELS = {
     "miniLM": {
@@ -69,10 +69,13 @@ LLM_MODELS = {
 
 DEFAULT_LLM_KEY = "mistral"
 
+RERANKER_MODEL_NAME = "BAAI/bge-reranker-base"
+
 VECTORSTORE_NAME = "faiss"
 
-RETRIEVAL_K = 5
-RERANK_TOP_K = 10
+RETRIEVAL_K = 3
+RERANK_TOP_N = 3
+RERANK_BASE_K = 15
 
 LLM_PROVIDER = "openai"
 LLM_MODEL_NAME = "gpt-4o-mini"
@@ -84,3 +87,5 @@ DEFAULT_CHUNKS_FILE = PROCESSED_DIR / "chunked_documents.json"
 DEFAULT_INDEX_PATH = INDEX_DIR / "faiss_index"
 
 SUPPORTED_PDF_GLOB = "*.pdf"
+
+
