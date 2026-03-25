@@ -1,19 +1,40 @@
 import json
 from pathlib import Path
-from langchain_community.document_loaders import PyMuPDFLoader
-from .config import ROOT_DIR, SUPPORTED_PDF_GLOB
+from langchain_core.documents import Document
+from .config import PROCESSED_DIR, ROOT_DIR, SUPPORTED_PDF_GLOB
 
 
 def parse_pdf(pdf_path):
-    # Parse one PDF and also keep document-level metadata.
-    loader = PyMuPDFLoader(pdf_path)
-    data = loader.load()
+    # Load one cleaned PDF from its processed JSON chunks.
+    pdf_file = Path(pdf_path)
+    if not pdf_file.is_absolute():
+        pdf_file = ROOT_DIR.joinpath(pdf_file)
 
-    return data
+    json_path = PROCESSED_DIR / f"{pdf_file.stem}.json"
+    if not json_path.exists():
+        print(f'Processed file not found: {json_path}')
+        return []
+
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    documents = []
+    for idx, chunk in enumerate(payload.get("chunks", [])):
+        documents.append(
+            Document(
+                page_content=chunk.get("content", ""),
+                metadata={
+                    "source": payload.get("source", str(pdf_file)),
+                    "title": payload.get("title", pdf_file.stem),
+                    "section_header": chunk.get("header", "Document"),
+                    "chunk_id": idx,
+                },
+            )
+        )
+
+    return documents
 
 
 def parse_pdf_folder(folder_path, suffix=SUPPORTED_PDF_GLOB):
-    # Parse all PDF files in a folder.
+    # Load all cleaned PDFs in a folder from processed JSON chunks.
 
     parsed_pdfs = []
     pdf_path = ROOT_DIR.joinpath(folder_path)
