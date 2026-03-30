@@ -377,8 +377,6 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 You only need the keys for providers you actually use.
 
-A `.env.example` file can be included as a template.
-
 ---
 
 ## Running the App
