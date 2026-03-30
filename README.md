@@ -57,9 +57,8 @@ The assistant should:
 ```text
 rag-pdf-assistant/
 │
-├── app.py
 ├── data/
-│   ├── raw_pdfs/
+│   ├── raw/
 │   ├── processed/
 │   └── eval/
 │
@@ -71,9 +70,7 @@ rag-pdf-assistant/
 │
 ├── outputs/
 │   ├── indexes/
-│   ├── logs/
-│   ├── samples/
-│   └── eval_results/
+│   └── experiments/
 │
 ├── src/
 │   ├── __init__.py
@@ -90,8 +87,10 @@ rag-pdf-assistant/
 │   ├── rag_chain.py
 │   ├── evaluation.py
 │   └── utils.py
-│
-├── .env.example
+├── app.py
+├── eval_dashboard.py
+├── experiment.py
+├── .env
 ├── .gitignore
 ├── requirements.txt
 └── README.md
@@ -100,18 +99,6 @@ rag-pdf-assistant/
 ---
 
 ## Folder and File Explanation
-
-### `app.py`
-
-Root-level Streamlit application for interactive question answering over the indexed PDF corpus.
-
-Responsibilities:
-- load or rebuild the vector index
-- initialize embedding and LLM backends
-- accept user questions
-- display grounded answers and retrieved chunks
-
----
 
 ### `data/`
 
@@ -149,17 +136,11 @@ Examples:
 
 Contains exploratory notebooks for step-by-step development and analysis.
 
-#### `01_parse_and_inspect.ipynb`
-Used to inspect raw PDF loading quality and metadata preservation.
+#### `Evaluation.ipynb`
+Used to compare retrieval and answer-quality evaluation results between retrieval-only and reranker.
 
-#### `02_chunk_and_index.ipynb`
-Used to test chunking and vector indexing.
-
-#### `03_retrieval_experiments.ipynb`
-Used to compare retrieval strategies and embedding models.
-
-#### `04_evaluation.ipynb`
-Used to inspect retrieval and answer-quality evaluation results.
+#### `RAG Test.ipynb`
+Used to test RAG pipeline from loading PDF files to RAG query.
 
 ---
 
@@ -170,13 +151,7 @@ Stores generated artifacts and experiment results.
 #### `outputs/indexes/`
 Stores saved FAISS indexes and related vector store files.
 
-#### `outputs/logs/`
-Stores logs from ingestion, indexing, retrieval, or app runs.
-
-#### `outputs/samples/`
-Stores sample question-answer outputs and other demo artifacts.
-
-#### `outputs/eval_results/`
+#### `outputs/experiments/`
 Stores evaluation summaries, metrics, and experiment outputs.
 
 ---
@@ -187,13 +162,6 @@ Contains the core reusable code for the system.
 
 #### `config.py`
 Central configuration file.
-
-Responsibilities:
-- define project paths
-- define chunking defaults
-- define embedding model registry
-- define retrieval defaults
-- load environment variables when needed
 
 #### `loaders.py`
 Loads PDF files into LangChain `Document` objects.
@@ -244,9 +212,9 @@ Responsibilities:
 - execute retrieval for a query
 
 #### `reranking.py`
-Reserved for second-stage reranking.
+For second-stage reranking.
 
-Possible future responsibilities:
+Responsibilities:
 - rerank top retrieved chunks
 - improve retrieval ordering with a cross-encoder or reranker model
 
@@ -257,14 +225,6 @@ Responsibilities:
 - initialize selected LLM provider
 - support local or hosted LLM backends
 - keep generation backend configurable
-
-#### `prompts.py`
-Stores prompt templates used in the RAG pipeline.
-
-Examples:
-- grounded-answering prompt
-- citation instructions
-- answer-style templates
 
 #### `rag_chain.py`
 Core RAG orchestration module.
@@ -284,14 +244,19 @@ Responsibilities:
 - compare outputs to expected references
 - compute retrieval and answer-quality metrics
 
-#### `utils.py`
-Contains shared helper functions.
+---
 
-Examples:
-- JSON helpers
-- metadata formatting
-- path utilities
-- logging helpers
+### `app.py`
+
+Root-level Streamlit application for interactive question answering over the indexed PDF corpus.
+
+### `eval_dashboard.py`
+
+Streamlit application for evaluating generated answers based on the evaluation dataset. It supports human-based feedback for completeness, correctness, and hallucination.
+
+### `experiment.py`
+
+Logic for experimentation tracking using MLFlow.
 
 ---
 
@@ -330,46 +295,19 @@ This structure makes it easy to compare retrieval quality systematically instead
 
 ---
 
-## Evaluation Plan
-
-Evaluation is split into two parts.
-
-### 1. Retrieval Evaluation
-Measures whether relevant chunks are retrieved.
-
-Possible metrics:
-- Hit@k
-- Recall@k
-- Precision@k
-- Mean Reciprocal Rank (MRR)
-
-### 2. Answer Evaluation
-Measures the quality of the generated response.
-
-Possible criteria:
-- groundedness
-- relevance
-- completeness
-- citation correctness
-- faithfulness to retrieved context
-
-The evaluation set should include technical questions paired with expected sources and expected answer cues.
-
----
-
-## Suggested Tech Stack
+## Tech Stack
 
 Core technologies used in this project include:
 
 - Python
 - LangChain
 - PyMuPDF / LangChain PDF loaders
-- RecursiveCharacterTextSplitter
 - sentence-transformers or other embedding backends
 - FAISS
 - Streamlit
 - pandas / numpy / scikit-learn
 - local or API-based LLM backends
+- MLFlow
 
 ---
 
@@ -398,8 +336,6 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 You only need the keys for providers you actually use.
 
-A `.env.example` file can be included as a template.
-
 ---
 
 ## Running the App
@@ -409,8 +345,20 @@ From the project root:
 ```bash
 streamlit run app.py
 ```
-
 This launches the Streamlit interface for querying the indexed PDF collection.
+
+for evaluation dashboard:
+```bash
+streamlit run eval_dashboard.py
+```
+This launches the Streamlit interface for RAG evaluation dashboard.
+
+For experiments:
+```bash
+mlflow ui
+python experiment.py --config configs/exp_baseline.yaml 
+```
+This runs an experiment with configs defined in `configs/exp_baseline.yaml` and logs the results in MLFlow dashboard.
 
 ---
 
@@ -448,11 +396,8 @@ This makes the project easier to debug, extend, compare experimentally, and pres
 Potential extensions include:
 
 - hybrid retrieval with BM25 + dense search
-- reranking with a cross-encoder
 - richer source formatting in the UI
-- upload support in the app
-- metadata filtering
-- OCR support for scanned PDFs
+- IEEE paper style-specific data cleaning
 - AWS-aligned deployment architecture
 - automatic answer grading
 - benchmark comparison across local and hosted LLMs
