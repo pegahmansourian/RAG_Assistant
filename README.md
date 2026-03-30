@@ -245,14 +245,6 @@ Responsibilities:
 - support local or hosted LLM backends
 - keep generation backend configurable
 
-#### `prompts.py`
-Stores prompt templates used in the RAG pipeline.
-
-Examples:
-- grounded-answering prompt
-- citation instructions
-- answer-style templates
-
 #### `rag_chain.py`
 Core RAG orchestration module.
 
@@ -287,7 +279,7 @@ Typical responsibilities:
 
 The project follows this high-level flow:
 
-1. Load PDFs from `data/raw_pdfs/`
+1. Load PDFs from `data/raw/`
 2. Convert pages into LangChain `Document` objects with metadata
 3. Apply light preprocessing
 4. Chunk documents with LangChain text splitters
@@ -345,14 +337,12 @@ The evaluation set should include technical questions paired with expected sourc
 
 ---
 
-## Suggested Tech Stack
+## Tech Stack
 
 Core technologies used in this project include:
 
 - Python
 - LangChain
-- PyMuPDF / LangChain PDF loaders
-- RecursiveCharacterTextSplitter
 - sentence-transformers or other embedding backends
 - FAISS
 - Streamlit
@@ -430,22 +420,6 @@ Then open `http://localhost:5000` in your browser.
 5. Launch the Streamlit app with `app.py`
 6. Run `experiment.py` for reproducible evaluation and MLflow tracking
 7. Use `eval_dashboard.py` to inspect and compare evaluation outputs
-
----
-
-## Why This Project Structure Matters
-
-This structure is designed to support both learning and professional presentation:
-
-- `src/` contains reusable application logic
-- `data/` holds inputs and evaluation assets
-- `outputs/` stores generated artifacts
-- `notebooks/` support experimentation and evaluation
-- `app.py` provides a demo interface
-- `config.py` keeps the system configurable
-- `evaluation.py` makes the project measurable
-
-This makes the project easier to debug, extend, compare experimentally, and present in interviews or on GitHub.
 
 ---
 
