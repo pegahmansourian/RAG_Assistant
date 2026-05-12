@@ -1,4 +1,4 @@
-from .config import RERANKER_MODEL_NAME, RERANK_TOP_N
+from ResearchRAG.config import RERANKER_MODEL_NAME, RERANK_TOP_N
 
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever

@@ -1,7 +1,7 @@
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_cohere import CohereEmbeddings
 import numpy as np
-from .config import EMBEDDING_MODELS, DEFAULT_EMBEDDING_KEY
+from ResearchRAG.config import EMBEDDING_MODELS, DEFAULT_EMBEDDING_KEY
 
 def get_embedding_config(model_key=None):
     if model_key is None:

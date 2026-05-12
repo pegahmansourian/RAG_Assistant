@@ -1,6 +1,6 @@
 from pathlib import Path
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from .config import CHUNK_SIZE, CHUNK_OVERLAP
+from ResearchRAG.config import CHUNK_SIZE, CHUNK_OVERLAP
 import json
 import re
 from .loaders import parse_pdf_folder
@@ -23,8 +23,6 @@ def split_text(docs, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
 
     splitter = create_splitter(chunk_size, chunk_overlap)
     chunks = splitter.split_documents(docs)
-    for chunk in chunks:
-        chunk.metadata["page"] = chunk.metadata["page"] + 1
 
     return chunks
 

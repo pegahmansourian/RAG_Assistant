@@ -2,6 +2,7 @@ data/
 .idea/
 outputs/
 mlruns/
+.claude/
 src/__pycache__/
 .env
 mlflow.db

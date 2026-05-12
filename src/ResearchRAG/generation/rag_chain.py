@@ -1,6 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 
-from .retriever import retrieve_documents
+from ResearchRAG.retrieval.retriever import retrieve_documents
 
 
 def format_documents(documents):
@@ -8,11 +8,11 @@ def format_documents(documents):
 
     for i, doc in enumerate(documents, start=1):
         source_file = doc.metadata.get("title", "unknown")
-        author = doc.metadata.get("author", "unknown")
-        page_num = doc.metadata.get("page", "unknown")
+        author = doc.metadata.get("authors", "unknown")
+        section = doc.metadata.get("section_header", "unknown")
 
         chunk_text = (
-            f"[Source {i} | File: {source_file} | Author: {author} | Page: {page_num}]\n"
+            f"[Source {i} | File: {source_file} | Author: {author} | Section: {section}]\n"
             f"{doc.page_content}"
         )
         formatted_chunks.append(chunk_text)
@@ -27,7 +27,13 @@ You are a helpful assistant answering questions about technical ML-based securit
 
 Use only the provided context to answer the question.
 If the answer is not supported by the context, say you do not have enough information.
-Always list the References with title of paper and its author separately at the end of your answer and cite from it in the answer.
+
+CITATION RULES:
+- Cite inline using bracketed numbers, e.g., [1], [2], or [1, 3] for multiple sources.
+- Each cited fact must have an inline citation immediately after the claim.
+- At the end, list all cited references in a numbered "References" section using this exact format:
+  [N] Author(s). "Paper Title." Section: <section name/number>, <year if available>.
+- Place each cited reference in one line.
 
 Question:
 {question}

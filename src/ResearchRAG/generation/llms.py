@@ -6,7 +6,7 @@ from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 import ollama
 
-from .config import ROOT_DIR, LLM_MODELS, DEFAULT_LLM_KEY
+from ResearchRAG.config import ROOT_DIR, LLM_MODELS, DEFAULT_LLM_KEY
 
 load_dotenv(ROOT_DIR / ".env")
 

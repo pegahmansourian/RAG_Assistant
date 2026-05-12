@@ -1,7 +1,8 @@
 import json
 from pathlib import Path
 from langchain_core.documents import Document
-from .config import PROCESSED_DIR, ROOT_DIR, SUPPORTED_PDF_GLOB
+from ResearchRAG.config import PROCESSED_DIR, ROOT_DIR, SUPPORTED_PDF_GLOB
+from ResearchRAG.ingestion.pdf_etl import run_pdf_etl_for_file
 
 
 def parse_pdf(pdf_path):
@@ -12,7 +13,13 @@ def parse_pdf(pdf_path):
 
     json_path = PROCESSED_DIR / f"{pdf_file.stem}.json"
     if not json_path.exists():
-        print(f'Processed file not found: {json_path}')
+        if not pdf_file.exists():
+            print(f"PDF not found: {pdf_file}")
+            return []
+        run_pdf_etl_for_file(pdf_file)
+
+    if not json_path.exists():
+        print(f"ETL did not produce output for: {pdf_file.name}")
         return []
 
     payload = json.loads(json_path.read_text(encoding="utf-8"))
@@ -24,6 +31,7 @@ def parse_pdf(pdf_path):
                 metadata={
                     "source": payload.get("source", str(pdf_file)),
                     "title": payload.get("title", pdf_file.stem),
+                    "authors": payload.get("authors", []),
                     "section_header": chunk.get("header", "Document"),
                     "chunk_id": idx,
                 },

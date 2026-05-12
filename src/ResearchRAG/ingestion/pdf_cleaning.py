@@ -136,12 +136,53 @@ class PDFCleaner:
         ),
     ]
 
+    IEEE_SUFFIX_PATTERN = re.compile(
+        r",?\s*"
+        r"\(?\s*"  # optional opening paren
+        r"(?:Senior Member|Member|Fellow|Life Member|Life Fellow|Associate Member)"
+        r"\s*,?\s*"
+        r"(?:IEEE|ACM|IET|IEICE)"
+        r"\s*\)?",  # optional closing paren
+        re.IGNORECASE,
+    )
+
+    AFFILIATION_PATTERN = re.compile(
+        r"(?i)(university|institute|department|school|lab|laboratory|email|@|©|vol\.|no\.)",
+    )
+
+    _NAME_NOISE = re.compile(
+        r"(?i)^(ieee|acm|iet|transactions|journal|society|section|volume|vol|"
+        r"department|university|institute|school|college|lab|laboratory|"
+        r"abstract|introduction|keywords|index|terms)$"
+    )
+
+    _LOOKS_LIKE_NAME = re.compile(
+        r"^(?:"
+        # Mixed case — allows CamelCase (ALMahadin) and single initials (Devika S)
+        r"[A-Z][a-záéíóúàèìòùäëïöüâêîôû\-\']*[a-z]+(?:\s+[A-Z][A-Za-záéíóúàèìòùäëïöüâêîôû\-\']*){1,4}"
+        r"|"
+        # Initial + lastname: "F. Lastname"
+        r"[A-Z]\.\s+[A-Z][A-Za-z\-\']{2,}"
+        r"|"
+        # All caps: "LAISEN NIE", "SAZID NAZAT", "HAOWEN TAN"
+        r"[A-Z]{2,}(?:[\-\'][A-Z]+)?(?:\s+[A-Z]{2,}(?:[\-\'][A-Z]+)?){1,4}"
+        r")$"
+    )
+
+    _NOISE_LINE_RE = re.compile(
+        r"(?i)(university|institute|department|school|faculty|college|lab|"
+        r"laboratory|supported|grant|funded|foundation|endowment|"
+        r"corresponding|email|@|doi|vol\.|received|manuscript|copyright|"
+        r"published|available|http|www\.)"
+    )
+
     def __init__(self, pdf_path: str | Path, config: CleaningConfig | None = None):
         """Open the PDF, load runtime config, and resolve a title for metadata."""
         self.pdf_path = Path(pdf_path)
         self.config = config or CleaningConfig()
         self.doc = fitz.open(self.pdf_path)
         self.title = (self.doc.metadata or {}).get("title", "") or self._guess_title_from_first_page()
+        self.authors = self._extract_authors()
 
     def _guess_title_from_first_page(self) -> str:
         """Infer a title from the largest text spans on page one when metadata is missing."""
@@ -355,6 +396,102 @@ class PDFCleaner:
         text = re.sub(r"(?im)^[-* ]*\*\*index terms\*\*", "## Index Terms\n", text)
         text = re.sub(r"\n{3,}", "\n\n", text).strip()
         return text
+
+    def _extract_authors(self) -> list[str]:
+        """Return a single-element list with the first author name only."""
+
+        # ── Strategy 1: PDF metadata ─────────────────────────────────────────
+        raw_meta = (self.doc.metadata or {}).get("author", "").strip()
+        if raw_meta:
+            # Strip IEEE suffixes, take the first comma/semicolon segment
+            cleaned = self.IEEE_SUFFIX_PATTERN.sub("", raw_meta)
+            first = re.split(r"[;,]", cleaned)[0].strip(" .")
+            if first and self._LOOKS_LIKE_NAME.match(first):
+                return [first]
+
+        # ── Strategy 2: Raw first-page text between title and abstract ───────
+        return self._extract_first_author_from_page()
+
+    def _extract_first_author_from_page(self) -> list[str]:
+        raw = self._page_text_without_margins(self.doc[0])
+        if not raw:
+            return []
+
+        # Strip IEEE/society membership suffixes first
+        raw = self.IEEE_SUFFIX_PATTERN.sub("", raw)
+
+        # Find abstract boundary — handles standalone heading AND inline "Abstract—"
+        abstract_match = re.search(
+            r"(?im)^\s*:?\s*\**abstract\**\s*[—\-–:]?\s*$"
+            r"|^\s*abstract\s*[—\-–]"
+            r"|(?<!\w)abstract\s*[—\-–]",
+            raw,
+        )
+        front = raw[: abstract_match.start()].strip() if abstract_match else raw
+
+        # Title word set for filtering title lines
+        title_word_set: set[str] = set()
+        if self.title:
+            title_word_set = set(re.sub(r"[^\w\s]", " ", self.title).lower().split())
+
+        def is_title_line(line: str) -> bool:
+            words = [w for w in re.sub(r"[^\w\s]", " ", line).lower().split() if len(w) > 2]
+            if not words:
+                return True
+            overlap = sum(1 for w in words if w in title_word_set) / len(words)
+            return overlap >= 0.75
+
+        def try_name(text: str) -> str | None:
+            token = re.sub(r"[†‡§¶*\d]+", "", text).strip(" ,.()")
+            token = re.sub(r"\s+", " ", token).strip()
+            if not token or len(token) < 4:
+                return None
+            if len(token.split()) > 5:  # names are short
+                return None
+            if any(self._NAME_NOISE.match(w) for w in token.split()):
+                return None
+            return token if self._LOOKS_LIKE_NAME.match(token) else None
+
+        # Filter lines
+        kept: list[str] = []
+        for line in front.splitlines():
+            s = line.strip()
+            if not s:
+                continue
+            if re.match(r"^[\d,\.\s\(\)]+$", s):  # pure digits/punctuation (superscripts)
+                continue
+            if is_title_line(s):
+                continue
+            if self._NOISE_LINE_RE.search(s):
+                continue
+            kept.append(s)
+
+        # Pass 1: try each line individually (handles "LAISEN NIE" on its own line)
+        for line in kept:
+            name = try_name(line)
+            if name:
+                return [name]
+            # Also try comma-splitting the line (handles "1, ZIYUAN GUI2, AND ILYONG CHUNG1")
+            for part in re.split(r",\s*", line):
+                part = re.sub(r"(?i),?\s+and\s+", " ", part).strip()
+                name = try_name(part)
+                if name:
+                    return [name]
+
+        # Pass 2: combine all kept lines (fallback for inline author lists like GAAD)
+        combined = " ".join(kept)
+        combined = re.sub(r"\s*\d+\s*", " ", combined)
+        combined = re.sub(r"(?i),?\s+and\s+", ", ", combined)
+        combined = re.sub(r",\s*,+", ",", combined)
+        combined = re.sub(r"\s{2,}", " ", combined).strip(" ,")
+
+        for candidate in re.split(r",\s*", combined):
+            name = try_name(candidate)
+            if name:
+                return [name]
+
+        return []
+
 
     @staticmethod
     def _looks_like_equation_or_formula(line: str) -> bool:
@@ -1022,6 +1159,7 @@ class PDFCleaner:
                     metadata={
                         "source": str(self.pdf_path),
                         "title": self.title,
+                        "authors": self.authors,
                         "section_header": chunk["header"],
                         "chunk_id": idx,
                     },
@@ -1030,6 +1168,7 @@ class PDFCleaner:
 
         return {
             "title": self.title,
+            "authors": self.authors,
             "cleaned_text": merged_text,
             "chunks": chunks,
             "documents": docs,
@@ -1063,6 +1202,7 @@ if __name__ == "__main__":
     if args.save_json:
         payload = {
             "title": result["title"],
+            "authors": result["authors"],
             "chunks": result["chunks"],
         }
         Path(args.save_json).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

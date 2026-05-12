@@ -1,4 +1,4 @@
-from .config import RETRIEVAL_K
+from ResearchRAG.config import RETRIEVAL_K
 
 
 def build_similarity_retriever(vectorstore, k=RETRIEVAL_K):

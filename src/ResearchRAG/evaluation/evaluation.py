@@ -1,8 +1,18 @@
 import json
 from pathlib import Path
+#from datasets import Dataset
+from ragas import evaluate
+from ragas.llms import LangchainLLMWrapper
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas import experiment, Dataset
+from ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall, FactualCorrectness
 
-from .retriever import retrieve_documents
-from .config import EVAL_DIR, EVAL_RESULTS_DIR
+
+from ResearchRAG.retrieval.retriever import retrieve_documents
+from ResearchRAG.config import EVAL_DIR, EVAL_RESULTS_DIR
+from ResearchRAG.generation.rag_chain import run_rag
+from ResearchRAG.generation.llms import build_llm
+from ResearchRAG.embedding.embeddings import build_embedding_model
 
 
 def load_eval_data(eval_file):
@@ -15,6 +25,28 @@ def load_eval_data(eval_file):
         data = json.load(f)
 
     return data
+
+
+def build_ragas_dataset(eval_data):
+
+    dataset = Dataset(
+        name="eval",
+        backend="local/csv",
+        root_dir="data/eval",
+    )
+
+    for item in eval_data:
+
+        dataset.append({
+            "question": item["question"],
+            "reference_answer": item["answer"],
+            "difficulty": item.get("difficulty"),
+            "type": item.get("type"),
+        })
+
+    dataset.save()
+
+    return dataset
 
 
 def extract_retrieved_sources(documents):
@@ -159,6 +191,60 @@ def save_evaluation_results(results, summary, output_file):
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
 
+
+def evaluate_rag(eval_file, retriever, llm, metrics):
+    ragas_llm = LangchainLLMWrapper(build_llm("llama3"))
+    ragas_embeddings = LangchainEmbeddingsWrapper(build_embedding_model("miniLM"))
+
+    dataset = build_ragas_dataset(
+        eval_file,
+        retriever,
+        llm
+    )
+
+    results = evaluate(
+        dataset,
+        metrics=metrics,
+        llm=ragas_llm,
+        embeddings=ragas_embeddings
+    )
+
+    return results
+
+@experiment()
+async def run_experiment(
+    row,
+    retriever,
+    rag_llm,
+    evaluator_llm,
+    experiment_name
+):
+
+    result = run_rag(
+        query=row["question"],
+        retriever=retriever,
+        llm=rag_llm
+    )
+
+    retrieved_contexts = [
+        doc.page_content
+        for doc in result["retrieved_documents"]
+    ]
+
+    score = await FactualCorrectness().ascore(
+        llm=evaluator_llm,
+        response=result["answer"],
+        reference_answer=row["reference_answer"]
+    )
+
+    return {
+        **row,
+        "response": result["answer"],
+        "contexts": retrieved_contexts,
+        "faithfulness": score.value,
+        "reason": score.reason,
+        "experiment_name": experiment_name
+    }
 
 if __name__ == "__main__":
     print("This module is intended to be imported and used from a notebook or script.")

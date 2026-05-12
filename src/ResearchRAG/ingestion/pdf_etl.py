@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
 
-from .config import PROCESSED_DIR, RAW_PDF_DIR, ROOT_DIR, SUPPORTED_PDF_GLOB
-from .pdf_cleaning import clean_pdf
+from ResearchRAG.config import PROCESSED_DIR, RAW_PDF_DIR, ROOT_DIR, SUPPORTED_PDF_GLOB
+try:
+    from .pdf_cleaning import clean_pdf
+except ImportError:
+    from ResearchRAG.ingestion.pdf_cleaning import clean_pdf
 
 
 def _resolve_path(path_value):
@@ -39,6 +42,7 @@ def run_pdf_etl_for_file(pdf_path, output_dir=PROCESSED_DIR, overwrite=False):
 
     payload = {
         "title": result["title"],
+        "authors": result["authors"],
         "source": str(pdf_file),
         "chunk_count": len(result["chunks"]),
         "chunks": result["chunks"],
