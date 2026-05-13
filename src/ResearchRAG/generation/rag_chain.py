@@ -1,7 +1,10 @@
+import logging
+
 from langchain_core.prompts import ChatPromptTemplate
 
 from ResearchRAG.retrieval.retriever import retrieve_documents
 
+logger = logging.getLogger(__name__)
 
 def format_documents(documents):
     formatted_chunks = []
@@ -29,11 +32,11 @@ Use only the provided context to answer the question.
 If the answer is not supported by the context, say you do not have enough information.
 
 CITATION RULES:
-- Cite inline using bracketed numbers, e.g., [1], [2], or [1, 3] for multiple sources.
-- Each cited fact must have an inline citation immediately after the claim.
-- At the end, list all cited references in a numbered "References" section using this exact format:
-  [N] Author(s). "Paper Title." Section: <section name/number>, <year if available>.
-- Place each cited reference in one line.
+- Ignore all numbers in the context. Create your own citation list from scratch.
+- Assign [1] to the first source you cite, [2] to the second, and so on. No gaps.
+- Cite immediately after each claim: single source [1], multiple sources [1,2].
+- End with a "References" section: [N] Author(s). "Paper Title." Section: <section name/number>.
+- Only list sources you actually cited. No empty entries.
 
 Question:
 {question}
@@ -48,16 +51,24 @@ Answer:
 
 
 def run_rag(query, retriever, llm):
-    retrieved_documents = retrieve_documents(query, retriever)
-    context = format_documents(retrieved_documents)
+    logger.info("Running RAG pipeline")
+    try:
+        retrieved_documents = retrieve_documents(query, retriever)
+        logger.info("Retrieved %d documents", len(retrieved_documents))
+        context = format_documents(retrieved_documents)
 
-    prompt = build_rag_prompt()
-    messages = prompt.format_messages(question=query, context=context)
+        prompt = build_rag_prompt()
+        messages = prompt.format_messages(question=query, context=context)
 
-    response = llm.invoke(messages)
+        logger.info("Invoking LLM")
+        response = llm.invoke(messages)
+        logger.info("RAG pipeline completed successfully")
 
-    return {
-        "query": query,
-        "answer": response.content,
-        "retrieved_documents": retrieved_documents,
-    }
+        return {
+            "query": query,
+            "answer": response.content,
+            "retrieved_documents": retrieved_documents,
+        }
+    except Exception:
+        logger.exception("Failed to run RAG pipeline")
+        raise

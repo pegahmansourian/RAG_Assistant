@@ -3,12 +3,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
+import logging
 
 import fitz  # PyMuPDF
 import pymupdf4llm
 from langchain_core.documents import Document
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class CleaningConfig:
@@ -46,8 +48,7 @@ class PDFCleaner:
     - merges sections spanning multiple pages into one chunk
 
     Important note:
-    This is heuristic. Scientific PDFs vary a lot, so expect to tune regexes and
-    margins for your papers.
+    This is heuristic. Scientific PDFs vary a lot.
     """
 
     HEADER_PATTERNS = [
@@ -178,11 +179,14 @@ class PDFCleaner:
 
     def __init__(self, pdf_path: str | Path, config: CleaningConfig | None = None):
         """Open the PDF, load runtime config, and resolve a title for metadata."""
+        logger.info("Initializing PDF cleaner for %s", pdf_path)
         self.pdf_path = Path(pdf_path)
         self.config = config or CleaningConfig()
         self.doc = fitz.open(self.pdf_path)
         self.title = (self.doc.metadata or {}).get("title", "") or self._guess_title_from_first_page()
+        logger.info("Extracted title: %s", self.title)
         self.authors = self._extract_authors()
+        logger.info("Extracted authors: %s", self.authors)
 
     def _guess_title_from_first_page(self) -> str:
         """Infer a title from the largest text spans on page one when metadata is missing."""
@@ -1142,67 +1146,46 @@ class PDFCleaner:
 
     def load_and_clean(self) -> dict[str, Any]:
         """Run the full PDF cleaning pipeline and return text, chunks, and LangChain documents."""
-        merged_text = self._merge_pages()
-        merged_text = self._remove_sections(merged_text)
-        merged_text = self._remove_algorithm_blocks(merged_text)
-        merged_text = self._inject_missing_front_matter(merged_text)
-        chunks = self._chunk_by_headers(merged_text)
-        chunks = self._repair_front_matter_chunks(chunks)
-        chunks = self._repair_first_introduction_chunk(chunks)
-        chunks = self._repair_section_prefixes(chunks)
+        logger.info("Starting PDF cleaning pipeline for %s", self.pdf_path.name)
+        try:
+            merged_text = self._merge_pages()
+            merged_text = self._remove_sections(merged_text)
+            merged_text = self._remove_algorithm_blocks(merged_text)
+            merged_text = self._inject_missing_front_matter(merged_text)
+            chunks = self._chunk_by_headers(merged_text)
+            chunks = self._repair_front_matter_chunks(chunks)
+            chunks = self._repair_first_introduction_chunk(chunks)
+            chunks = self._repair_section_prefixes(chunks)
 
-        docs = []
-        for idx, chunk in enumerate(chunks):
-            docs.append(
-                Document(
-                    page_content=chunk["content"],
-                    metadata={
-                        "source": str(self.pdf_path),
-                        "title": self.title,
-                        "authors": self.authors,
-                        "section_header": chunk["header"],
-                        "chunk_id": idx,
-                    },
+            docs = []
+            for idx, chunk in enumerate(chunks):
+                docs.append(
+                    Document(
+                        page_content=chunk["content"],
+                        metadata={
+                            "source": str(self.pdf_path),
+                            "title": self.title,
+                            "authors": self.authors,
+                            "section_header": chunk["header"],
+                            "chunk_id": idx,
+                        },
+                    )
                 )
-            )
 
-        return {
-            "title": self.title,
-            "authors": self.authors,
-            "cleaned_text": merged_text,
-            "chunks": chunks,
-            "documents": docs,
-        }
+            logger.info("PDF cleaning completed | file=%s | chunks=%d", self.pdf_path.name, len(chunks))
+            return {
+                "title": self.title,
+                "authors": self.authors,
+                "cleaned_text": merged_text,
+                "chunks": chunks,
+                "documents": docs,
+            }
+        except Exception:
+            logger.exception("Failed during PDF cleaning pipeline: %s", self.pdf_path.name)
+            raise
 
 
 def clean_pdf(pdf_path: str | Path, config: CleaningConfig | None = None) -> dict[str, Any]:
     """Convenience wrapper that cleans one PDF without instantiating the class manually."""
     cleaner = PDFCleaner(pdf_path=pdf_path, config=config)
     return cleaner.load_and_clean()
-
-
-if __name__ == "__main__":
-    import argparse
-    import json
-
-    parser = argparse.ArgumentParser(description="Clean a scientific PDF for RAG.")
-    parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
-    parser.add_argument("--save-text", type=str, default="", help="Optional path to save cleaned text")
-    parser.add_argument("--save-json", type=str, default="", help="Optional path to save chunk metadata as JSON")
-    args = parser.parse_args()
-
-    result = clean_pdf(args.pdf_path)
-
-    print(f"Title: {result['title']}")
-    print(f"Chunks: {len(result['chunks'])}")
-
-    if args.save_text:
-        Path(args.save_text).write_text(result["cleaned_text"], encoding="utf-8")
-
-    if args.save_json:
-        payload = {
-            "title": result["title"],
-            "authors": result["authors"],
-            "chunks": result["chunks"],
-        }
-        Path(args.save_json).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

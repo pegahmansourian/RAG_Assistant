@@ -1,18 +1,22 @@
-import shutil
+import logging
 from pathlib import Path
 
 import streamlit as st
 
-from ResearchRAG.ingestion.loaders import parse_pdf_folder, parse_pdf
+from ResearchRAG.ingestion.loaders import parse_pdf_folder, parse_pdf, sync_parsed_pdfs
 from ResearchRAG.ingestion.chunking import split_text
 from ResearchRAG.embedding.embeddings import build_embedding_model
 from ResearchRAG.embedding.vectorstore import build_database, load_faiss_index, save_faiss_index, update_faiss_index, delete_from_faiss_index
-from ResearchRAG.retrieval.retriever import build_similarity_retriever
+from ResearchRAG.retrieval.retriever import build_retriever
 from ResearchRAG.generation.rag_chain import run_rag
 from ResearchRAG.config import RAW_PDF_DIR, RERANK_BASE_K, RERANK_TOP_N, RETRIEVAL_K, PROCESSED_DIR
 from ResearchRAG.generation.llms import build_llm
 from ResearchRAG.retrieval.reranking import build_rerank_retriever
 
+from ResearchRAG.utils.logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 st.set_page_config(page_title="Technical PDF RAG Assistant", layout="wide")
 st.title("Technical PDF RAG Assistant")
@@ -40,27 +44,35 @@ index_name = st.sidebar.text_input(
 rebuild_index = st.sidebar.button("Rebuild Index")
 
 # ── Session state ────────────────────────────────────────────────────────────
-if "vectorstore" not in st.session_state:
-    st.session_state.vectorstore = None
-if "retriever" not in st.session_state:
-    st.session_state.retriever = None
-if "use_reranker" not in st.session_state:
-    st.session_state.use_reranker = None
+for key in ("vectorstore", "retriever", "use_reranker", "current_embedding_key"):
+    if key not in st.session_state:
+        st.session_state[key] = None
 
-def format_authors(authors) -> str:
+# ── Helpers ──────────────────────────────────────────────────────────────────
+def format_authors(authors):
     if not authors:
         return "unknown"
     if isinstance(authors, str):
         authors = [a.strip() for a in authors.split(",") if a.strip()]
-    if len(authors) == 1:
-        return authors[0]
-    return f"{authors[0]} et al."
+    return authors[0] if len(authors) == 1 else f"{authors[0]} et al."
 
+def build_pipeline_retriever(vectorstore, use_reranker=False):
+    if use_reranker:
+        base = build_retriever(vectorstore, search_type="similarity", k=RERANK_BASE_K)
+        return build_rerank_retriever(base,top_n=RERANK_TOP_N)
+
+    return build_retriever(vectorstore, search_type="similarity")
+
+# ── Pipeline initialization ──────────────────────────────────────────────────
 def initialize_pipeline():
+    logger.info("Initializing RAG pipeline")
+    sync_parsed_pdfs()
+
     embedding_model = build_embedding_model(embedding_key)
 
     if rebuild_index:
-        documents = parse_pdf_folder(RAW_PDF_DIR)
+        logger.info("Rebuilding FAISS index")
+        documents = parse_pdf_folder()
         chunked_documents = split_text(documents)
         vectorstore = build_database(chunked_documents, embedding_model)
         save_faiss_index(vectorstore, index_name)
@@ -68,22 +80,20 @@ def initialize_pipeline():
         try:
             vectorstore = load_faiss_index(index_name, embedding_model)
         except Exception:
-            documents = parse_pdf_folder(RAW_PDF_DIR)
+            logger.warning("Failed to load existing index, rebuilding")
+            documents = parse_pdf_folder()
             chunked_documents = split_text(documents)
             vectorstore = build_database(chunked_documents, embedding_model)
             save_faiss_index(vectorstore, index_name)
 
-    if use_reranker:
-        base_retriever = build_similarity_retriever(vectorstore, k=RERANK_BASE_K)
-        retriever = build_rerank_retriever(base_retriever, top_n=RERANK_TOP_N)
-    else:
-        retriever = build_similarity_retriever(vectorstore, RETRIEVAL_K)
+    retriever = build_pipeline_retriever(vectorstore, use_reranker=use_reranker)
 
     st.session_state.vectorstore = vectorstore
     st.session_state.retriever = retriever
     st.session_state.use_reranker = use_reranker
     st.session_state.current_embedding_key = embedding_key
 
+    logger.info("Pipeline initialized successfully")
 
 pipeline_needs_update = (
     st.session_state.retriever is None
@@ -133,9 +143,12 @@ with left_col:
             if dest.exists():
                 already_exists.append(f.name)
                 continue
+
             with open(dest, "wb") as out:
                 out.write(f.read())
             saved.append((f.name, dest))
+            logger.info("Uploaded PDF: %s", f.name)
+
         if already_exists:
             st.info(
                 "Already in library: "
@@ -153,6 +166,7 @@ with left_col:
                     except Exception as e:
                         failed.append(name)
                         path.unlink(missing_ok=True)
+                        logger.exception("Failed to process uploaded PDF: %s", name)
                         st.warning(f"Could not process {name}: {e}")
 
                 if new_docs:
@@ -166,24 +180,14 @@ with left_col:
                         index_name, chunked, embedding_model
                     )
                     # Rebuild retriever against updated vectorstore
-                    if use_reranker:
-                        base = build_similarity_retriever(
-                            st.session_state.vectorstore, k=RERANK_BASE_K
-                        )
-                        st.session_state.retriever = build_rerank_retriever(
-                            base, top_n=RERANK_TOP_N
-                        )
-                    else:
-                        st.session_state.retriever = build_similarity_retriever(
-                            st.session_state.vectorstore, RETRIEVAL_K
-                        )
+                    st.session_state.retriever = build_pipeline_retriever(st.session_state.vectorstore, use_reranker)
 
                     added = [n for n, _ in saved if n not in failed]
                     if added:
                         st.success(f"Added to index: {', '.join(added)}")
+                        logger.info("Added %d PDFs to vector index",len(added))
 
     pdf_files = sorted(Path(RAW_PDF_DIR).glob("*.pdf"))
-
     if pdf_files:
         st.markdown(f"**{len(pdf_files)} PDF(s) available:**")
         for pdf in pdf_files:
@@ -191,9 +195,8 @@ with left_col:
             col1.markdown(f"📄 {pdf.stem}", help=pdf.name)
             if col2.button("🗑", key=f"del_{pdf.name}"):
                 # Remove PDF and its processed JSON
+                logger.info("Deleting PDF: %s", pdf.name)
                 pdf.unlink(missing_ok=True)
-                json_file = Path(PROCESSED_DIR) / f"{pdf.stem}.json"
-                json_file.unlink(missing_ok=True)
 
                 # Removing from existing index
                 embedding_model = build_embedding_model(
@@ -203,17 +206,8 @@ with left_col:
                     index_name, pdf.name, embedding_model
                 )
                 # Rebuild retriever against updated vectorstore
-                if use_reranker:
-                    base = build_similarity_retriever(
-                        st.session_state.vectorstore, k=RERANK_BASE_K
-                    )
-                    st.session_state.retriever = build_rerank_retriever(
-                        base, top_n=RERANK_TOP_N
-                    )
-                else:
-                    st.session_state.retriever = build_similarity_retriever(
-                        st.session_state.vectorstore, RETRIEVAL_K
-                    )
+                st.session_state.retriever = build_pipeline_retriever(st.session_state.vectorstore, use_reranker)
+                logger.info("Deleted PDF successfully: %s", pdf.name)
                 st.rerun()
 
     else:
@@ -232,6 +226,7 @@ with right_col:
     ask_button = st.button("Ask", use_container_width=True)
 
     if ask_button and query.strip():
+        logger.info("Received user query")
         with st.spinner("Preparing LLM model..."):
             llm = build_llm(llm_key)
 
@@ -241,6 +236,7 @@ with right_col:
                 retriever=st.session_state.retriever,
                 llm=llm
             )
+        logger.info("RAG query completed successfully")
 
         st.subheader("Answer")
         st.write(result["answer"])

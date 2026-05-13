@@ -1,12 +1,11 @@
 import json
+import logging
 from pathlib import Path
 
 from ResearchRAG.config import PROCESSED_DIR, RAW_PDF_DIR, ROOT_DIR, SUPPORTED_PDF_GLOB
-try:
-    from .pdf_cleaning import clean_pdf
-except ImportError:
-    from ResearchRAG.ingestion.pdf_cleaning import clean_pdf
+from .pdf_cleaning import clean_pdf
 
+logger = logging.getLogger(__name__)
 
 def _resolve_path(path_value):
     path = Path(path_value)
@@ -30,33 +29,40 @@ def run_pdf_etl_for_file(pdf_path, output_dir=PROCESSED_DIR, overwrite=False):
 
     paths = _output_paths(pdf_file, output_dir)
     if not overwrite and paths["text_path"].exists() and paths["json_path"].exists():
+        logger.info("Skipping already processed PDF: %s", pdf_file.name)
         return {
             "pdf_path": str(pdf_file),
             "text_path": str(paths["text_path"]),
             "json_path": str(paths["json_path"]),
             "status": "skipped",
         }
+    logger.info("Running PDF ETL for %s", pdf_file.name)
+    try:
+        result = clean_pdf(pdf_file)
+        paths["text_path"].write_text(result["cleaned_text"], encoding="utf-8")
 
-    result = clean_pdf(pdf_file)
-    paths["text_path"].write_text(result["cleaned_text"], encoding="utf-8")
+        payload = {
+            "title": result["title"],
+            "authors": result["authors"],
+            "source": str(pdf_file),
+            "chunk_count": len(result["chunks"]),
+            "chunks": result["chunks"],
+        }
+        paths["json_path"].write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    payload = {
-        "title": result["title"],
-        "authors": result["authors"],
-        "source": str(pdf_file),
-        "chunk_count": len(result["chunks"]),
-        "chunks": result["chunks"],
-    }
-    paths["json_path"].write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        logger.info("PDF ETL completed | file=%s | chunks=%d", pdf_file.name, len(result["chunks"]))
 
-    return {
-        "pdf_path": str(pdf_file),
-        "text_path": str(paths["text_path"]),
-        "json_path": str(paths["json_path"]),
-        "title": result["title"],
-        "chunk_count": len(result["chunks"]),
-        "status": "processed",
-    }
+        return {
+            "pdf_path": str(pdf_file),
+            "text_path": str(paths["text_path"]),
+            "json_path": str(paths["json_path"]),
+            "title": result["title"],
+            "chunk_count": len(result["chunks"]),
+            "status": "processed",
+        }
+    except Exception:
+        logger.exception("Failed PDF ETL for %s", pdf_file.name)
+        raise
 
 
 def run_pdf_etl(input_dir=RAW_PDF_DIR, output_dir=PROCESSED_DIR, suffix=SUPPORTED_PDF_GLOB, overwrite=False):
@@ -67,13 +73,16 @@ def run_pdf_etl(input_dir=RAW_PDF_DIR, output_dir=PROCESSED_DIR, suffix=SUPPORTE
 
     results = []
     if not source_dir.exists():
-        print("Folder not found!")
+        logger.error("Input PDF folder not found: %s", source_dir)
         return results
+
+    logger.info("Running batch PDF ETL from %s", source_dir)
 
     for pdf_file in sorted(source_dir.glob(suffix)):
         try:
             results.append(run_pdf_etl_for_file(pdf_file, output_dir=output_dir, overwrite=overwrite))
         except Exception as exc:
+            logger.exception("Failed batch ETL for %s",pdf_file.name)
             results.append(
                 {
                     "pdf_path": str(pdf_file),
@@ -82,37 +91,10 @@ def run_pdf_etl(input_dir=RAW_PDF_DIR, output_dir=PROCESSED_DIR, suffix=SUPPORTE
                 }
             )
 
-    manifest = {
-        "input_dir": str(source_dir),
-        "output_dir": str(output_dir),
-        "total_files": len(results),
-        "processed_files": sum(1 for item in results if item["status"] == "processed"),
-        "skipped_files": sum(1 for item in results if item["status"] == "skipped"),
-        "failed_files": sum(1 for item in results if item["status"] == "failed"),
-        "files": results,
-    }
-    manifest_path = output_dir / "processed_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    logger.info(
+        "Batch PDF ETL completed | processed=%d | failed=%d",
+        sum(1 for item in results if item["status"] == "processed"),
+        sum(1 for item in results if item["status"] == "failed")
+    )
 
     return results
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run the PDF cleaning ETL job.")
-    parser.add_argument("--input-dir", type=str, default=str(RAW_PDF_DIR), help="Directory containing PDF files")
-    parser.add_argument("--output-dir", type=str, default=str(PROCESSED_DIR), help="Directory for ETL outputs")
-    parser.add_argument("--suffix", type=str, default=SUPPORTED_PDF_GLOB, help="Glob pattern for source PDFs")
-    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing .txt and .json outputs")
-    args = parser.parse_args()
-
-    results = run_pdf_etl(
-        input_dir=args.input_dir,
-        output_dir=args.output_dir,
-        suffix=args.suffix,
-        overwrite=args.overwrite,
-    )
-    print(f"Processed {sum(1 for item in results if item['status'] == 'processed')} PDF files.")
-    print(f"Skipped {sum(1 for item in results if item['status'] == 'skipped')} PDF files.")
-    print(f"Failed {sum(1 for item in results if item['status'] == 'failed')} PDF files.")
