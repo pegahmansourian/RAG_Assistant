@@ -5,16 +5,16 @@ import time
 import yaml
 import mlflow
 
-from src.loaders import parse_pdf_folder
-from src.chunking import split_text
-from src.embeddings import build_embedding_model
-from src.vectorstore import build_database, load_faiss_index, save_faiss_index
-from src.retriever import build_similarity_retriever
-from src.rag_chain import run_rag
-from src.config import RAW_PDF_DIR, OUTPUTS_DIR, INDEX_DIR
-from src.llms import build_llm
-from src.reranking import build_rerank_retriever
-from src.evaluation import normalize_expected_sources, compute_hit_at_k, compute_recall_at_k, extract_retrieved_sources
+from ResearchRAG.ingestion.loaders import parse_pdf_folder
+from ResearchRAG.ingestion.chunking import split_text
+from ResearchRAG.embedding.embeddings import build_embedding_model
+from ResearchRAG.embedding.vectorstore import build_database, load_faiss_index, save_faiss_index
+from ResearchRAG.retrieval.retriever import build_similarity_retriever
+from ResearchRAG.generation.rag_chain import run_rag
+from ResearchRAG.config import RAW_PDF_DIR, OUTPUTS_DIR, INDEX_DIR
+from ResearchRAG.generation.llms import build_llm
+from ResearchRAG.retrieval.reranking import build_rerank_retriever
+from ResearchRAG.evaluation.evaluation import normalize_expected_sources, compute_hit_at_k, compute_recall_at_k
 
 
 def load_yaml(path):
@@ -107,7 +107,8 @@ def answer_question(pipeline, question_record):
     for doc in source_documents:
         retrieved_contexts.append({
             "source_file": doc.metadata.get("title", ""),
-            "page_num": doc.metadata.get("page", "")
+            #"page_num": doc.metadata.get("page", ""),
+            "content": doc.page_content
         })
 
     expected_sources = normalize_expected_sources(question_record.get("evidence", []))

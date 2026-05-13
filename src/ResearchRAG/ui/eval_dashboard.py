@@ -3,15 +3,15 @@ from pathlib import Path
 
 import streamlit as st
 
-from src.loaders import parse_pdf_folder
-from src.chunking import split_text
-from src.embeddings import build_embedding_model
-from src.vectorstore import build_database, load_faiss_index, save_faiss_index
-from src.retriever import build_similarity_retriever, build_mmr_retriever
-from src.rag_chain import run_rag
-from src.evaluation import load_eval_data, summarize_retrieval_results, normalize_expected_sources
-from src.llms import build_llm
-from src.config import RAW_PDF_DIR, EVAL_DIR
+from ResearchRAG.ingestion.loaders import parse_pdf_folder
+from ResearchRAG.ingestion.chunking import split_text
+from ResearchRAG.embedding.embeddings import build_embedding_model
+from ResearchRAG.embedding.vectorstore import build_database, load_faiss_index, save_faiss_index
+from ResearchRAG.retrieval.retriever import build_similarity_retriever, build_mmr_retriever
+from ResearchRAG.generation.rag_chain import run_rag
+from ResearchRAG.evaluation import load_eval_data, summarize_retrieval_results, normalize_expected_sources
+from ResearchRAG.generation.llms import build_llm
+from ResearchRAG.config import RAW_PDF_DIR, EVAL_DIR
 
 
 st.set_page_config(page_title="RAG Evaluation Dashboard", layout="wide")

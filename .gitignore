@@ -2,6 +2,8 @@ data/
 .idea/
 outputs/
 mlruns/
-src/__pycache__/
+.claude/
+__pycache__/
+*.py[cod]
 .env
 mlflow.db

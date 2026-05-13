@@ -2,37 +2,49 @@
 
 A citation-grounded Retrieval-Augmented Generation (RAG) assistant for technical machine learning and security PDFs.
 
-This project loads technical PDFs, preserves page-level metadata, chunks documents using LangChain text splitters, builds vector indexes with configurable embedding models, retrieves relevant passages for a user query, and generates grounded answers with source references.
+This project processes technical PDFs into structured retrieval-ready artifacts, builds configurable vector indexes, retrieves relevant context for user queries, and generates citation-grounded answers using multiple LLM backends.
 
-The system is designed as a portfolio-ready applied GenAI project for ML, GenAI, and cloud-oriented roles, with a focus on modular design, retrieval quality, reproducible experiments, and deployable architecture.
+The system is designed as a portfolio-ready applied GenAI project focused on:
+
+- modular RAG architecture
+- retrieval quality experimentation
+- reproducible workflows
+- production-style engineering practices
+- scalable ingestion and indexing pipelines
 
 ---
 
 ## Project Goals
 
 This project aims to:
-
-- Build a LangChain-based RAG pipeline over technical PDFs
-- Preserve source metadata such as filename and page number for grounded citations
-- Compare different embedding models and retrieval strategies
-- Support multiple LLM backends for answer generation
-- Evaluate retrieval and answer quality in a reproducible way
-- Package the system in a clean structure suitable for extension and deployment
+- Build a modular LangChain-based RAG pipeline
+- Support configurable embedding and LLM backends
+- Improve retrieval quality through reranking and retrieval strategies
+- Preserve structured metadata for grounded citations
+- Support incremental indexing workflows
+- Create a clean engineering-oriented codebase suitable for extension and deployment
+- Enable reproducible experimentation and evaluation
 
 ---
 
 ## Key Features
-
-- PDF loading with page-level metadata
-- LangChain `Document`-based pipeline
-- Chunking with `RecursiveCharacterTextSplitter`
+- Modular ingestion, retrieval, and generation architecture
+- PDF ETL preprocessing pipeline
+- Section-aware document chunking
+- Processed PDF caching
 - Configurable embedding backends
-- FAISS vector store indexing
+- FAISS vector indexing
 - Similarity and MMR retrieval
+- Cross-encoder reranking
+- Incremental FAISS index updates
 - Citation-grounded answer generation
-- Swappable LLM backend
+- Swappable LLM backends
 - Streamlit user interface
-- Evaluation-ready project structure
+- Structured application logging
+- Automatic processed-PDF synchronization
+- MLflow experiment tracking
+- reproducible retrieval experiments
+- evaluation-ready architecture
 
 ---
 
@@ -40,15 +52,15 @@ This project aims to:
 
 A user asks:
 
-> What are common defenses against prompt injection in RAG systems?
+> What are common attacks on CAV networks?
 
-The assistant should:
+The assistant will:
 
-1. Search across the indexed PDF collection
-2. Retrieve the most relevant chunks
-3. Pass only retrieved evidence to the LLM
-4. Generate a grounded answer
-5. Return sources such as filename and page number
+1. Retrieve relevant chunks from indexed technical PDFs
+2. Optionally rerank retrieved passages
+3. Pass grounded context into the LLM
+4. Generate a citation-grounded answer
+5. Return references linked to retrieved sources
 
 ---
 
@@ -58,256 +70,307 @@ The assistant should:
 rag-pdf-assistant/
 │
 ├── data/
-│   ├── raw/
+│   ├── eval/
 │   ├── processed/
-│   └── eval/
+│   └── raw/
 │
 ├── notebooks/
-│   ├── 01_parse_and_inspect.ipynb
-│   ├── 02_chunk_and_index.ipynb
-│   ├── 03_retrieval_experiments.ipynb
-│   └── 04_evaluation.ipynb
+│   ├── Evaluation.ipynb
+│   └── RAG Test.ipynb
 │
 ├── outputs/
+│   ├── experiments/
 │   ├── indexes/
-│   └── experiments/
+│   └── logs/
 │
-├── src/
+src/
+├── ResearchRAG/
+│   ├── embedding/
+│   │   ├── __init__.py
+│   │   ├── embeddings.py
+│   │   └── vectorstore.py
+│   │
+│   ├── evaluation/
+│   │   ├── __init__.py
+│   │   ├── evaluation.py
+│   │   └── experiment.py
+│   │
+│   ├── generation/
+│   │   ├── __init__.py
+│   │   ├── llms.py
+│   │   └── rag_chain.py
+│   │
+│   ├── ingestion/
+│   │   ├── __init__.py
+│   │   ├── chunking.py
+│   │   ├── loaders.py
+│   │   ├── pdf_cleaning.py
+│   │   └── pdf_etl.py
+│   │
+│   ├── retrieval/
+│   │   ├── __init__.py
+│   │   ├── reranking.py
+│   │   └── retriever.py
+│   │
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   ├── app.py
+│   │   └── eval_dashboard.py
+│   │
+│   └── utils/
+│   │   ├── __init__.py
+│   │   └── logging_config.py
+│   │   
 │   ├── __init__.py
-│   ├── config.py
-│   ├── loaders.py
-│   ├── preprocessing.py
-│   ├── chunking.py
-│   ├── embeddings.py
-│   ├── vectorstore.py
-│   ├── retrievers.py
-│   ├── reranking.py
-│   ├── llms.py
-│   ├── prompts.py
-│   ├── rag_chain.py
-│   ├── evaluation.py
-│   └── utils.py
-├── app.py
-├── eval_dashboard.py
-├── experiment.py
-├── .env
-├── .gitignore
-├── requirements.txt
+│   └── config.py
+│
 └── README.md
 ```
 
 ---
 
-## Folder and File Explanation
-
-### `data/`
-
-Stores project inputs and evaluation assets.
-
-#### `data/raw_pdfs/`
-Contains the original PDF files used as the document corpus.
-
-Examples:
-- RAG papers
-- LLM safety papers
-- ML security papers
-- technical architecture documents
-
-#### `data/processed/`
-Stores optional intermediate artifacts generated during development.
-
-Examples:
-- serialized parsed documents
-- chunk inspection files
-- intermediate preprocessing outputs
-
-#### `data/eval/`
-Stores evaluation datasets.
-
-Examples:
-- benchmark questions
-- expected sources
-- expected keywords
-- relevance labels
-
----
-
-### `notebooks/`
-
-Contains exploratory notebooks for step-by-step development and analysis.
-
-#### `Evaluation.ipynb`
-Used to compare retrieval and answer-quality evaluation results between retrieval-only and reranker.
-
-#### `RAG Test.ipynb`
-Used to test RAG pipeline from loading PDF files to RAG query.
-
----
-
-### `outputs/`
-
-Stores generated artifacts and experiment results.
-
-#### `outputs/indexes/`
-Stores saved FAISS indexes and related vector store files.
-
-#### `outputs/experiments/`
-Stores evaluation summaries, metrics, and experiment outputs.
-
----
-
-### `src/`
-
-Contains the core reusable code for the system.
-
-#### `config.py`
-Central configuration file.
-
-#### `loaders.py`
-Loads PDF files into LangChain `Document` objects.
-
-Responsibilities:
-- read PDF files from disk
-- preserve page-level metadata
-- prepare documents for downstream preprocessing and chunking
-
-#### `preprocessing.py`
-Handles light text cleanup before chunking.
-
-Examples:
-- whitespace normalization
-- ligature cleanup
-- extraction cleanup for technical PDFs
-
-#### `chunking.py`
-Chunks LangChain documents using text splitters.
-
-Responsibilities:
-- build `RecursiveCharacterTextSplitter`
-- split documents into retrieval-friendly chunks
-- preserve metadata for citation grounding
-
-#### `embeddings.py`
-Builds embedding backends.
-
-Responsibilities:
-- initialize embedding model by key
-- support comparison of multiple embedding models
-- isolate embedding-provider logic from the rest of the pipeline
-
-#### `vectorstore.py`
-Builds, saves, and loads FAISS vector stores.
-
-Responsibilities:
-- create vector store from chunked documents
-- save indexes locally
-- reload indexes for reuse
-
-#### `retrievers.py`
-Defines retrieval strategies.
-
-Responsibilities:
-- build similarity retrievers
-- build MMR retrievers
-- execute retrieval for a query
-
-#### `reranking.py`
-For second-stage reranking.
-
-Responsibilities:
-- rerank top retrieved chunks
-- improve retrieval ordering with a cross-encoder or reranker model
-
-#### `llms.py`
-Builds the answer-generation LLM backend.
-
-Responsibilities:
-- initialize selected LLM provider
-- support local or hosted LLM backends
-- keep generation backend configurable
-
-#### `rag_chain.py`
-Core RAG orchestration module.
-
-Responsibilities:
-- retrieve relevant documents
-- format context for the prompt
-- run the LLM on retrieved evidence
-- return answer plus sources
-
-#### `evaluation.py`
-Runs evaluation experiments.
-
-Responsibilities:
-- load evaluation questions
-- run retrieval and generation
-- compare outputs to expected references
-- compute retrieval and answer-quality metrics
-
----
-
-### `app.py`
-
-Root-level Streamlit application for interactive question answering over the indexed PDF corpus.
-
-### `eval_dashboard.py`
-
-Streamlit application for evaluating generated answers based on the evaluation dataset. It supports human-based feedback for completeness, correctness, and hallucination.
-
-### `experiment.py`
-
-Logic for experimentation tracking using MLFlow.
-
----
-
 ## End-to-End Pipeline
 
-The project follows this high-level flow:
+The system follows this workflow:
 
-1. Load PDFs from `data/raw_pdfs/`
-2. Convert pages into LangChain `Document` objects with metadata
-3. Apply light preprocessing
-4. Chunk documents with LangChain text splitters
-5. Build embeddings for chunks
-6. Create and save a FAISS vector store
-7. Accept a user query
-8. Retrieve top-k relevant chunks
-9. Pass retrieved context into the RAG prompt
-10. Generate a grounded answer with source references
-11. Evaluate retrieval and answer quality on a labeled test set
+1. Upload or place PDFs into `data/raw/`
+2. Run PDF ETL preprocessing
+3. Clean and normalize extracted text
+4. Chunk content into structured retrieval units
+5. Cache processed artifacts into JSON files
+6. Generate embeddings
+7. Create or update a FAISS vector index
+8. Retrieve relevant chunks
+9. Optionally rerank retrieved passages
+10. Generate grounded answers with citations
 
 ---
 
-## Retrieval Configurations
+## PDF ETL Pipeline
 
-The project is designed to support multiple retrieval setups.
+The ingestion system uses a lightweight ETL pipeline for converting raw PDFs into reusable structured artifacts.
 
-### Baseline
-- dense vector retrieval with FAISS similarity search
+The ETL process:
 
-### Variants
+- extracts text from PDFs
+- removes noisy sections and formatting artifacts
+- repairs section structure
+- chunks content using semantic headers
+- stores processed outputs for reuse
+
+Processed artifacts are cached under:
+
+> data/processed/
+
+The application automatically synchronizes missing processed files during startup.
+
+---
+
+## Retrieval Pipeline
+
+The project supports multiple retrieval configurations.
+
+### Supported Retrieval Modes
+- similarity retrieval
 - MMR retrieval
-- alternative embedding models
-- future reranking
-- future hybrid retrieval
+- cross-encoder reranking
 
-This structure makes it easy to compare retrieval quality systematically instead of relying only on manual inspection.
+### Reranking
+
+The system supports second-stage reranking using HuggingFace cross-encoder models. This improves retrieval quality by:
+
+- rescoring retrieved chunks
+- improving ranking precision
+- filtering noisy retrieval results
+
+---
+
+## Incremental Index Updates
+
+The application supports incremental FAISS updates. When new PDFs are uploaded:
+
+- only new PDFs are processed
+- only new chunks are embedded
+- the existing FAISS index is updated in place
+
+This avoids rebuilding the entire vector index for every upload.
+
+---
+
+## Streamlit Application Features
+
+The Streamlit application supports:
+
+- PDF upload/remove directly from the UI
+- automatic indexing of uploaded PDFs
+- deletion of PDFs from the vector index
+- configurable embedding model selection
+- configurable LLM backend selection
+- optional reranking
+- retrieved chunk inspection
+- grounded answer generation
+
+----
+
+## Logging
+
+The project uses structured logging across ingestion, indexing, retrieval, and generation modules. 
+
+Features include:
+
+- module-level loggers
+- per-run log files
+- exception trace logging
+- pipeline-stage visibility
+- debugging support for ingestion and indexing workflows
+
+Logs are stored under:
+
+> outputs/logs/
+
+---
+
+## Core Modules
+### `ingestion/`
+
+Handles document ingestion and preprocessing.
+
+#### `pdf_etl.py`
+
+Runs the PDF ETL pipeline and manages processed artifacts.
+
+#### `pdf_cleaning.py`
+
+Cleans extracted PDF text and repairs section structure.
+
+#### `loaders.py`
+
+Loads processed PDF artifacts into LangChain Document objects.
+
+#### `chunking.py`
+
+Splits documents into retrieval-ready chunks.
+
+---
+
+### `embedding/`
+
+Handles embedding generation and vector indexing.
+
+#### `embeddings.py`
+
+Builds configurable embedding backends.
+
+Supported providers include:
+
+- HuggingFace
+- Cohere
+
+#### `evectorstore.py`
+
+Builds, saves, loads, updates, and modifies FAISS indexes.
+
+---
+
+### `retrieval/`
+
+Handles retrieval and reranking logic.
+
+#### `retriever.py`
+
+Builds configurable retrievers for similarity and MMR search.
+
+#### `reranking.py`
+
+Builds cross-encoder reranking pipelines.
+
+---
+
+### `generation/`
+
+Handles LLM orchestration and answer generation.
+
+#### `llms.py`
+
+Builds configurable LLM backends.
+
+Supported providers include:
+
+- OpenAI
+- Cohere
+- Ollama
+
+#### `rag_chain.py`
+
+Runs the full RAG orchestration pipeline:
+
+- retrieve documents
+- format context
+- invoke the LLM
+- return grounded answers
+
+---
+
+### `utils/`
+#### `logging_config.py`
+
+Initializes structured logging and per-run log files.
+
+---
+
+## Supported Model Backends
+### Embedding Models
+
+Examples:
+
+- all-MiniLM
+- MPNet
+- BGE
+- Cohere embeddings
+
+### LLM Backends
+
+Examples:
+
+- Mistral
+- Llama
+- Qwen 
+- OpenAI models
+- Cohere chat models
+- Ollama-hosted local models
+
+---
+
+## Experiment Tracking with MLflow
+
+The project supports experiment tracking using MLflow.
+
+Tracked experiment components may include:
+- embedding model selection
+- retriever configuration
+- reranker usage
+- chunking parameters
+- evaluation metrics
+- generated outputs
+
+This enables reproducible comparison between retrieval and generation configurations.
 
 ---
 
 ## Tech Stack
 
-Core technologies used in this project include:
+Core technologies used in this project:
 
 - Python
 - LangChain
-- PyMuPDF / LangChain PDF loaders
-- sentence-transformers or other embedding backends
 - FAISS
 - Streamlit
-- pandas / numpy / scikit-learn
-- local or API-based LLM backends
-- MLFlow
+- HuggingFace
+- Cohere API
+- OpenAI API
+- Ollama
+- MLflow
+- sentence-transformers
 
 ---
 
@@ -316,7 +379,7 @@ Core technologies used in this project include:
 Clone the repository and install dependencies:
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/pegahmansourian/RAG_Assistant
 cd rag-pdf-assistant
 pip install -r requirements.txt
 ```
@@ -338,56 +401,33 @@ You only need the keys for providers you actually use.
 
 ---
 
-## Running the App
+## Running the Application
 
 From the project root:
 
 ```bash
-streamlit run app.py
+streamlit run src/ResearchRAG/ui/app.py
 ```
+
 This launches the Streamlit interface for querying the indexed PDF collection.
 
-for evaluation dashboard:
-```bash
-streamlit run eval_dashboard.py
-```
-This launches the Streamlit interface for RAG evaluation dashboard.
+---
 
-For experiments:
+## Running Experiments
+
+Example experiment run:
+
+```bash
+python run_experiment.py --config configs/exp_reranker.yaml
+```
+
+To inspect tracked runs locally with MLflow:
+
 ```bash
 mlflow ui
-python experiment.py --config configs/exp_baseline.yaml 
 ```
-This runs an experiment with configs defined in `configs/exp_baseline.yaml` and logs the results in MLFlow dashboard.
 
----
-
-## Typical Development Workflow
-
-1. Add PDFs to `data/raw_pdfs/`
-2. Test loading and chunking in notebooks
-3. Build embeddings and vector store
-4. Test retrieval quality
-5. Run the RAG chain end to end
-6. Launch the Streamlit app
-7. Run evaluation experiments
-8. Compare embeddings and retrieval settings
-
----
-
-## Why This Project Structure Matters
-
-This structure is designed to support both learning and professional presentation:
-
-- `src/` contains reusable application logic
-- `data/` holds inputs and evaluation assets
-- `outputs/` stores generated artifacts
-- `notebooks/` support experimentation
-- `app.py` provides a demo interface
-- `config.py` keeps the system configurable
-- `evaluation.py` makes the project measurable
-
-This makes the project easier to debug, extend, compare experimentally, and present in interviews or on GitHub.
+Then open `http://localhost:5000` in your browser.
 
 ---
 
@@ -396,11 +436,13 @@ This makes the project easier to debug, extend, compare experimentally, and pres
 Potential extensions include:
 
 - hybrid retrieval with BM25 + dense search
-- richer source formatting in the UI
-- IEEE paper style-specific data cleaning
-- AWS-aligned deployment architecture
+- OCR support for scanned PDFs
 - automatic answer grading
-- benchmark comparison across local and hosted LLMs
+- metadata-aware retrieval
+- conversational memory
+- benchmark evaluation suites
+- cloud deployment architecture
+- async ingestion pipelines
 
 ---
 
@@ -409,3 +451,8 @@ Potential extensions include:
 **Pegah Mansourian**  
 Applied ML / AI researcher focused on trustworthy AI, anomaly detection, and security-oriented machine learning systems.
 
+---
+
+## Note
+
+ChatGPT AI tools were used as a development aid for code debugging and documentation support. The project structure, implementation, experimentation, and final validation were completed by the author.
