@@ -2,6 +2,7 @@ data/
 .idea/
 outputs/
 mlruns/
+notebooks/
 .claude/
 __pycache__/
 *.py[cod]
