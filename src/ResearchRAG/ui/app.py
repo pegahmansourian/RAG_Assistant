@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import asyncio
 
 import streamlit as st
 
@@ -9,11 +10,24 @@ from ResearchRAG.embedding.embeddings import build_embedding_model
 from ResearchRAG.embedding.vectorstore import build_database, load_faiss_index, save_faiss_index, update_faiss_index, delete_from_faiss_index
 from ResearchRAG.retrieval.retriever import build_retriever
 from ResearchRAG.generation.rag_chain import run_rag
-from ResearchRAG.config import RAW_PDF_DIR, RERANK_BASE_K, RERANK_TOP_N, RETRIEVAL_K, PROCESSED_DIR
+from ResearchRAG.config import RAW_PDF_DIR, RERANK_BASE_K, RERANK_TOP_N, RETRIEVAL_K, PROCESSED_DIR, RAGAS_METRICS_FOR_UI
 from ResearchRAG.generation.llms import build_llm
 from ResearchRAG.retrieval.reranking import build_rerank_retriever
+from ResearchRAG.evaluation.evaluation import evaluate_rag_response
+
 
 from ResearchRAG.utils.logging_config import setup_logging
+
+RAGAS_METRIC_DESCRIPTIONS = {
+    "faithfulness":
+        "Measures whether the generated answer "
+        "is supported by the retrieved context "
+        "and avoids hallucinations.",
+
+    "answer_relevancy":
+        "Measures how relevant the generated "
+        "answer is to the user question.",
+}
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -43,8 +57,26 @@ index_name = st.sidebar.text_input(
 
 rebuild_index = st.sidebar.button("Rebuild Index")
 
+st.sidebar.markdown("---")
+st.sidebar.subheader("Evaluation")
+
+selected_metric = st.sidebar.selectbox(
+    "RAGAS metric",
+    options=list(RAGAS_METRICS_FOR_UI.keys()),
+    index=0,
+)
+
+st.session_state.selected_metric = selected_metric
+
+st.sidebar.caption(RAGAS_METRIC_DESCRIPTIONS[selected_metric])
+
+evaluate_button = st.sidebar.button(
+    "Evaluate Response",
+    use_container_width=True
+)
+
 # ── Session state ────────────────────────────────────────────────────────────
-for key in ("vectorstore", "retriever", "use_reranker", "current_embedding_key"):
+for key in ("vectorstore", "retriever", "use_reranker", "current_embedding_key", "llm", "selected_metric", "last_query", "last_result"):
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -228,25 +260,66 @@ with right_col:
     if ask_button and query.strip():
         logger.info("Received user query")
         with st.spinner("Preparing LLM model..."):
-            llm = build_llm(llm_key)
+            st.session_state.llm = build_llm(llm_key)
 
         with st.spinner("Retrieving documents and generating answer..."):
             result = run_rag(
                 query=query,
                 retriever=st.session_state.retriever,
-                llm=llm
+                llm=st.session_state.llm
             )
+        st.session_state.last_query = query
+        st.session_state.last_result = result
         logger.info("RAG query completed successfully")
+
+    if st.session_state.last_result is not None:
+        result = st.session_state.last_result
 
         st.subheader("Answer")
         st.write(result["answer"])
 
         st.subheader("Retrieved Chunks")
-        for i, doc in enumerate(result["retrieved_documents"], start=1):
-            authors = format_authors(doc.metadata.get("authors", "unknown"))
+
+        for i, doc in enumerate(
+                result["retrieved_documents"],
+                start=1
+        ):
+            authors = format_authors(
+                doc.metadata.get("authors", "unknown")
+            )
+
             with st.expander(
-                f"Chunk {i} | {doc.metadata.get('title', 'unknown')} | "
-                f"Author(S): {authors} | "
-                f"section {doc.metadata.get('section_header', 'unknown')}"
+                    f"Chunk {i} | "
+                    f"{doc.metadata.get('title', 'unknown')} | "
+                    f"Author(S): {authors} | "
+                    f"section "
+                    f"{doc.metadata.get('section_header', 'unknown')}"
             ):
                 st.write(doc.page_content)
+
+        if evaluate_button:
+            try:
+                with st.spinner("Running RAGAS evaluation..."):
+
+                    eval_result = asyncio.run(
+                        evaluate_rag_response(
+                            question=st.session_state.last_query,
+                            response=st.session_state.last_result["answer"],
+                            retrieved_documents=st.session_state.last_result["retrieved_documents"],
+                            metric_name=st.session_state.selected_metric,
+                        )
+                    )
+
+                st.markdown("## 📊 Evaluation Result")
+
+                metric_name = (eval_result["metric"].replace("_", " ").title())
+
+                st.markdown(
+                    f"### {metric_name}: "
+                    f"`{eval_result['score']:.4f}`"
+                )
+
+            except Exception as e:
+                logger.exception("RAGAS evaluation failed")
+
+                st.error(f"Evaluation failed: {str(e)}")

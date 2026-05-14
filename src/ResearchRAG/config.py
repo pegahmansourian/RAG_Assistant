@@ -1,5 +1,6 @@
 from pathlib import Path
 from dotenv import load_dotenv
+from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall, FactualCorrectness
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -88,4 +89,15 @@ DEFAULT_INDEX_PATH = INDEX_DIR / "faiss_index"
 
 SUPPORTED_PDF_GLOB = "*.pdf"
 
+RAGAS_METRICS_FOR_UI = {
+    "faithfulness": Faithfulness(),
+    "answer_relevancy": AnswerRelevancy()
+}
 
+RAGAS_METRICS_FOR_EXP = {
+    "faithfulness": Faithfulness(),
+    "answer_relevancy": AnswerRelevancy(),
+    "context_precision": ContextPrecision(),
+    "context_recall": ContextRecall(),
+    "factual_correctness": FactualCorrectness(),
+}
