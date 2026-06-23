@@ -4,13 +4,16 @@ from pathlib import Path
 
 from ragas import experiment, Dataset
 from ragas.dataset_schema import SingleTurnSample
-from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall, FactualCorrectness
-from ragas.llms import LangchainLLMWrapper
-from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.metrics.collections import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall, FactualCorrectness
+from ragas.llms import llm_factory
+from ragas.embeddings import HuggingFaceEmbeddings
+
+from litellm import AsyncOpenAI as LiteLLMAsync
+import instructor
 
 
 from ResearchRAG.retrieval.retriever import retrieve_documents
-from ResearchRAG.config import EVAL_DIR, EVAL_RESULTS_DIR, RAGAS_METRICS_FOR_EXP
+from ResearchRAG.config import EVAL_DIR, EVAL_RESULTS_DIR
 from ResearchRAG.generation.rag_chain import run_rag
 from ResearchRAG.generation.llms import build_llm
 from ResearchRAG.embedding.embeddings import build_embedding_model
@@ -60,6 +63,20 @@ def build_ragas_dataset(eval_data):
 
     return dataset
 
+def build_ragas_metric(*args, **kwargs):
+    match kwargs["metric_name"]:
+        case "faithfulness":
+            return Faithfulness(*args, **kwargs)
+        case "answer_relevancy":
+            return AnswerRelevancy(*args, **kwargs)
+        case "context_precision":
+            return ContextPrecision(*args, **kwargs)
+        case "context_recall":
+            return ContextRecall(*args, **kwargs)
+        case "factual_correctness":
+            return FactualCorrectness(*args, **kwargs)
+        case _:
+            return AnswerRelevancy(*args, **kwargs)
 
 def extract_retrieved_sources(documents):
     sources = []
@@ -113,42 +130,96 @@ def save_evaluation_results(results, output_file):
         raise
 
 
-async def evaluate_rag_response(question, response, retrieved_documents, metric_name, ragas_llm="llama3", ragas_embedding="miniLM", reference_answer=None):
-    if metric_name not in RAGAS_METRICS_FOR_EXP:
-        logger.error("Unsupported RAGAS metric: %s", metric_name)
-        raise ValueError(f"Unsupported metric: {metric_name}")
-
-    logger.info("Running RAGAS evaluation | metric=%s", metric_name)
+async def evaluate_rag_response(dataset, pipeline, metric_name, ragas_llm="cohere", ragas_embedding="miniLM", reference_answer=None):
+    logger.info("Running RAGAS experiment | metric=%s | llm=%s | embedding=%s", metric_name, ragas_llm, ragas_embedding)
 
     try:
-        metric = RAGAS_METRICS_FOR_EXP[metric_name]
-        metric.llm = LangchainLLMWrapper(build_llm(ragas_llm))
-        metric.embeddings = LangchainEmbeddingsWrapper(build_embedding_model(ragas_embedding))
-
-        retrieved_contexts = [doc.page_content for doc in retrieved_documents]
-
-        #retrieved_metadata = extract_retrieved_sources(retrieved_documents)
-
-        sample = SingleTurnSample(
-            user_input=question,
-            response=response,
-            retrieved_contexts=retrieved_contexts,
+        #evaluator_llm = llm_factory(model=ragas_llm, client=build_llm(ragas_llm))
+        litellm_async_client = LiteLLMAsync(
+            base_url="http://localhost:11434/v1",
+            api_key="ollama"
         )
-        if reference_answer is not None:
-            sample.reference = reference_answer
 
-        score = await metric.single_turn_ascore(sample)
+        # Wrap with instructor as AsyncInstructor — _check_client_async returns True for this
+        async_instructor_client = instructor.from_openai(
+            litellm_async_client,
+            mode=instructor.Mode.JSON
+        )
 
-        logger.info("RAGAS evaluation completed | metric=%s | score=%.4f", metric_name, score)
+        evaluator_llm = llm_factory(
+            model="mistral:latest",
+            provider="ollama",
+            client=async_instructor_client,
+            adapter="litellm"
+        )
+        evaluator_embeddings = HuggingFaceEmbeddings(model="BAAI/bge-base-en-v1.5")
 
-        return {
-            "question": question,
-            "response": response,
-            "reference_answer": reference_answer,
-            "retrieved_contexts": retrieved_contexts,
-            "metric": metric_name,
-            "score": score,
+        metric_args = {
+            "metric_name": metric_name,
+            "llm": evaluator_llm,
+            "embeddings": evaluator_embeddings,
         }
+
+        match metric_name:
+            case "answer_relevancy":
+                metric_args["strictness"] = 2
+            case "faithfulness":
+                metric_args.pop("embeddings", None)
+
+        metric = build_ragas_metric(**metric_args)
+
+        @experiment()
+        async def run_experiment(row):
+            result = run_rag(
+                query=row["question"],
+                retriever=pipeline["retriever"],
+                llm=pipeline["llm"]
+            )
+
+            logger.info("Scoring sample | metric=%s", metric_name)
+
+            match metric_name:
+                case "faithfulness":
+                    score = await metric.ascore(
+                        user_input=row["question"],
+                        response=result["answer"],
+                        retrieved_contexts=[doc.page_content for doc in result["retrieved_documents"]],
+                    )
+                case _:  # answer_relevancy and others
+                    score = await metric.ascore(
+                        user_input=row["question"],
+                        response=result["answer"],
+                    )
+
+            logger.info("Sample scored | metric=%s | score=%.4f", metric_name, score)
+
+            return {
+                **row,
+                "response": result.get("answer", ""),
+                metric_name: score.value,
+            }
+
+        result = await run_experiment.arun(dataset)
+
     except Exception:
-        logger.exception("Failed RAGAS evaluation | metric=%s", metric_name)
+        logger.exception("Failed RAGAS experiment | metric=%s", metric_name)
         raise
+
+    # Convert to DataFrame for analysis
+    df = result.to_pandas()
+
+    # Print summary
+    logger.info("\n" + "=" * 40)
+    logger.info("Experiment Results")
+    logger.info("=" * 40)
+    logger.info(f"\nDataFrame shape: {df.shape}")
+    logger.info(f"\n{df.to_string()}")
+
+    metric_columns = [
+        "answer_relevancy",
+    ]
+    for column in metric_columns:
+        if column in df.columns:
+            logger.info(f"Average {column}: {df[column].mean():.4f}")
+
+    return result, df

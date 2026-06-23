@@ -15,6 +15,8 @@ from ResearchRAG.generation.llms import build_llm
 from ResearchRAG.retrieval.reranking import build_rerank_retriever
 from ResearchRAG.evaluation.evaluation import evaluate_rag_response
 
+from ragas import Dataset
+
 
 from ResearchRAG.utils.logging_config import setup_logging
 
@@ -301,22 +303,32 @@ with right_col:
             try:
                 with st.spinner("Running RAGAS evaluation..."):
 
-                    eval_result = asyncio.run(
+                    dataset = Dataset(
+                        name="eval",
+                        backend="inmemory",
+                        data = [{"question": st.session_state.last_query}]
+                    )
+
+                    _, eval_df = asyncio.run(
                         evaluate_rag_response(
-                            question=st.session_state.last_query,
-                            response=st.session_state.last_result["answer"],
-                            retrieved_documents=st.session_state.last_result["retrieved_documents"],
+                            dataset=dataset,
+                            pipeline={
+                                "retriever" : st.session_state.retriever,
+                                "llm" : st.session_state.llm
+                            },
                             metric_name=st.session_state.selected_metric,
                         )
                     )
 
                 st.markdown("## 📊 Evaluation Result")
 
-                metric_name = (eval_result["metric"].replace("_", " ").title())
+                metric_name = (st.session_state.selected_metric.replace("_", " ").title())
+
+                score = eval_df[st.session_state.selected_metric].iloc[0]
 
                 st.markdown(
                     f"### {metric_name}: "
-                    f"`{eval_result['score']:.4f}`"
+                    f"`{score:.4f}`"
                 )
 
             except Exception as e:

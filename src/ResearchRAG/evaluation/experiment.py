@@ -12,21 +12,14 @@ from ResearchRAG.ingestion.chunking import split_text
 from ResearchRAG.embedding.embeddings import build_embedding_model
 from ResearchRAG.embedding.vectorstore import build_database, load_faiss_index, save_faiss_index
 from ResearchRAG.retrieval.retriever import build_retriever
-from ResearchRAG.generation.rag_chain import run_rag
 from ResearchRAG.config import RAW_PDF_DIR, OUTPUTS_DIR, INDEX_DIR, EVAL_DIR, ROOT_DIR
 from ResearchRAG.generation.llms import build_llm
 from ResearchRAG.retrieval.reranking import build_rerank_retriever
-from ResearchRAG.evaluation.evaluation import normalize_expected_sources
+from ResearchRAG.evaluation.evaluation import normalize_expected_sources, evaluate_rag_response
 from ResearchRAG.utils.logging_config import setup_logging
 
-from ragas import experiment, Dataset
-from ragas.dataset_schema import SingleTurnSample
+from ragas import Dataset
 from ragas.metrics.collections import Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall, FactualCorrectness
-from ragas.llms import llm_factory
-from ragas.embeddings import HuggingFaceEmbeddings
-
-from litellm import AsyncOpenAI as LiteLLMAsync
-import instructor
 
 
 setup_logging()
@@ -188,133 +181,6 @@ def build_pipeline(config):
         logger.exception("Failed to build pipeline | embedding=%s | llm=%s", embedding_key, llm_key)
         raise
 
-
-def answer_question(pipeline, question_record):
-    query = question_record["question"]
-    logger.info("Answering question | query=%s", query[:80])
-
-    try:
-        result = run_rag(
-            query=query,
-            retriever=pipeline["retriever"],
-            llm=pipeline["llm"]
-        )
-
-        predicted_answer = result["answer"]
-        source_documents = result.get("retrieved_documents", [])
-
-        retrieved_contexts = []
-        for doc in source_documents:
-            retrieved_contexts.append({
-                "source_file": doc.metadata.get("title", ""),
-                "content": doc.page_content
-            })
-
-        logger.info("Question answered | retrieved_docs=%d", len(retrieved_contexts))
-
-        expected_sources = normalize_expected_sources(question_record.get("evidence", []))
-        expected_contexts = []
-        if expected_sources:
-            for src in expected_sources:
-                expected_contexts.append({
-                    "source_file": src.get('source_file', ""),
-                    "section": src.get('section', "")
-                })
-
-        return {
-            "question": query,
-            "ground_truth_answer": question_record.get("answer", ""),
-            "ground_truth_retrieved_contexts": expected_contexts,
-            "predicted_answer": predicted_answer,
-            "retrieved_contexts": retrieved_contexts
-        }
-
-    except Exception:
-        logger.exception("Failed to answer question | query=%s", query[:80])
-        raise
-
-
-async def run_experiment_rag_response(dataset, pipeline, metric_name, ragas_llm="cohere", ragas_embedding="miniLM", reference_answer=None):
-    logger.info("Running RAGAS experiment | metric=%s | llm=%s | embedding=%s", metric_name, ragas_llm, ragas_embedding)
-
-    try:
-        #evaluator_llm = llm_factory(model=ragas_llm, client=build_llm(ragas_llm))
-        litellm_async_client = LiteLLMAsync(
-            base_url="http://localhost:11434/v1",
-            api_key="ollama"
-        )
-
-        # Wrap with instructor as AsyncInstructor — _check_client_async returns True for this
-        async_instructor_client = instructor.from_openai(
-            litellm_async_client,
-            mode=instructor.Mode.JSON
-        )
-
-        evaluator_llm = llm_factory(
-            model="mistral:latest",
-            provider="ollama",
-            client=async_instructor_client,
-            adapter="litellm"
-        )
-        evaluator_embeddings = HuggingFaceEmbeddings(model="BAAI/bge-base-en-v1.5")
-
-        metric_args = {
-            "metric_name": metric_name,
-            "llm": evaluator_llm,
-            "embeddings": evaluator_embeddings,
-        }
-
-        match metric_name:
-            case "answer_relevancy":
-                metric_args["strictness"] = 2
-            case "faithfulness":
-                metric_args.pop("embeddings", None)
-
-        metric = build_ragas_metric(**metric_args)
-
-        @experiment()
-        async def run_experiment(row):
-            result = answer_question(pipeline, row)
-
-            logger.info("Scoring sample | metric=%s", metric_name)
-            score = await metric.ascore(user_input=row["question"], response=result["predicted_answer"])
-
-            logger.info("Sample scored | metric=%s | score=%.4f", metric_name, score)
-
-            return {
-                **row,
-                "response": result.get("predicted_answer", ""),
-                "answer_relevancy": score.value,
-            }
-
-        result = await run_experiment.arun(dataset)
-
-    except Exception:
-        logger.exception("Failed RAGAS experiment | metric=%s", metric_name)
-        raise
-
-    # Convert to DataFrame for analysis
-    df = result.to_pandas()
-
-    # Print summary
-    logger.info("\n" + "=" * 80)
-    logger.info("Experiment Results")
-    logger.info("=" * 80)
-    logger.info(f"\nDataFrame shape: {df.shape}")
-    logger.info(f"\n{df.to_string()}")
-
-    metric_columns = [
-        "answer_relevancy",
-    ]
-    for column in metric_columns:
-        if column in df.columns:
-            logger.info(f"Average {column}: {df[column].mean():.4f}")
-
-    return result, df
-
-
-
-
 def save_json(data, path):
     logger.info("Saving JSON | path=%s", path)
     try:
@@ -341,7 +207,7 @@ async def main():
     logger.info("Starting experiment | name=%s | metric=%s", config["experiment_name"], config["metric_name"])
 
     start_time = time.perf_counter()
-    result, df = await run_experiment_rag_response(
+    result, df = await evaluate_rag_response(
         ragas_eval_set, pipeline, config["metric_name"],
         ragas_llm="llama3", ragas_embedding="miniLM", reference_answer=None
     )
