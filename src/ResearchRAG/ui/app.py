@@ -59,26 +59,8 @@ index_name = st.sidebar.text_input(
 
 rebuild_index = st.sidebar.button("Rebuild Index")
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("Evaluation")
-
-selected_metric = st.sidebar.selectbox(
-    "RAGAS metric",
-    options=list(RAGAS_METRICS_FOR_UI.keys()),
-    index=0,
-)
-
-st.session_state.selected_metric = selected_metric
-
-st.sidebar.caption(RAGAS_METRIC_DESCRIPTIONS[selected_metric])
-
-evaluate_button = st.sidebar.button(
-    "Evaluate Response",
-    use_container_width=True
-)
-
 # ── Session state ────────────────────────────────────────────────────────────
-for key in ("vectorstore", "retriever", "use_reranker", "current_embedding_key", "llm", "selected_metric", "last_query", "last_result"):
+for key in ("vectorstore", "retriever", "use_reranker", "current_embedding_key", "llm", "last_query", "last_result", "last_scores"):
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -272,6 +254,7 @@ with right_col:
             )
         st.session_state.last_query = query
         st.session_state.last_result = result
+        st.session_state.last_scores = None
         logger.info("RAG query completed successfully")
 
     if st.session_state.last_result is not None:
@@ -281,57 +264,46 @@ with right_col:
         st.write(result["answer"])
 
         st.subheader("Retrieved Chunks")
-
-        for i, doc in enumerate(
-                result["retrieved_documents"],
-                start=1
-        ):
-            authors = format_authors(
-                doc.metadata.get("authors", "unknown")
-            )
-
+        for i, doc in enumerate(result["retrieved_documents"], start=1):
+            authors = format_authors(doc.metadata.get("authors", "unknown"))
             with st.expander(
                     f"Chunk {i} | "
                     f"{doc.metadata.get('title', 'unknown')} | "
                     f"Author(S): {authors} | "
-                    f"section "
-                    f"{doc.metadata.get('section_header', 'unknown')}"
+                    f"section {doc.metadata.get('section_header', 'unknown')}"
             ):
                 st.write(doc.page_content)
 
-        if evaluate_button:
+        if st.session_state.last_scores is None:  # ← only run once per query
             try:
                 with st.spinner("Running RAGAS evaluation..."):
-
-                    dataset = Dataset(
-                        name="eval",
-                        backend="inmemory",
-                        data = [{"question": st.session_state.last_query}]
-                    )
-
-                    _, eval_df = asyncio.run(
-                        evaluate_rag_response(
-                            dataset=dataset,
-                            pipeline={
-                                "retriever" : st.session_state.retriever,
-                                "llm" : st.session_state.llm
-                            },
-                            metric_name=st.session_state.selected_metric,
+                    scores = {}
+                    for metric_name in RAGAS_METRICS_FOR_UI:
+                        dataset = Dataset(
+                            name="eval",
+                            backend="inmemory",
+                            data=[{"question": st.session_state.last_query}]
                         )
-                    )
-
-                st.markdown("## 📊 Evaluation Result")
-
-                metric_name = (st.session_state.selected_metric.replace("_", " ").title())
-
-                score = eval_df[st.session_state.selected_metric].iloc[0]
-
-                st.markdown(
-                    f"### {metric_name}: "
-                    f"`{score:.4f}`"
-                )
-
+                        _, eval_df = asyncio.run(
+                            evaluate_rag_response(
+                                dataset=dataset,
+                                pipeline={
+                                    "retriever": st.session_state.retriever,
+                                    "llm": st.session_state.llm
+                                },
+                                metric_name=metric_name,
+                            )
+                        )
+                        scores[metric_name] = round(eval_df[metric_name].iloc[0], 4)
+                st.session_state.last_scores = scores  # ← cache it
             except Exception as e:
                 logger.exception("RAGAS evaluation failed")
-
                 st.error(f"Evaluation failed: {str(e)}")
+
+        if st.session_state.last_scores:
+            st.markdown("## 📊 Evaluation Results")
+            st.table({
+                "Metric": [m.replace("_", " ").title() for m in st.session_state.last_scores],
+                "Score": list(st.session_state.last_scores.values()),
+                "Description": [RAGAS_METRIC_DESCRIPTIONS[m] for m in st.session_state.last_scores],
+            })
