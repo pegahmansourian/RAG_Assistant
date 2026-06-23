@@ -1,7 +1,7 @@
 experiment_name: base
 
 # data
-eval_set: data/eval/Evaluation_QA_2.json
+eval_set: Evaluation_QA_3.json
 
 # indexing / chunking
 embedding_model: bge_base
@@ -13,6 +13,10 @@ retriever_k: 5
 use_reranker: false
 rerank_base_k: 10
 rerank_top_n: 3
+search_type: mmr
 
 # generation
 llm: mistral
+
+# RAGAS metric
+metric_name: answer_relevancy

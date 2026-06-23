@@ -94,10 +94,3 @@ RAGAS_METRICS_FOR_UI = {
     "answer_relevancy": AnswerRelevancy()
 }
 
-RAGAS_METRICS_FOR_EXP = {
-    "faithfulness": Faithfulness(),
-    "answer_relevancy": AnswerRelevancy(),
-    "context_precision": ContextPrecision(),
-    "context_recall": ContextRecall(),
-    "factual_correctness": FactualCorrectness(),
-}

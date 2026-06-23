@@ -7,7 +7,7 @@ from ResearchRAG.ingestion.loaders import parse_pdf_folder
 from ResearchRAG.ingestion.chunking import split_text
 from ResearchRAG.embedding.embeddings import build_embedding_model
 from ResearchRAG.embedding.vectorstore import build_database, load_faiss_index, save_faiss_index
-from ResearchRAG.retrieval.retriever import build_similarity_retriever, build_mmr_retriever
+from ResearchRAG.retrieval.retriever import build_retriever
 from ResearchRAG.generation.rag_chain import run_rag
 from ResearchRAG.evaluation import load_eval_data, summarize_retrieval_results, normalize_expected_sources
 from ResearchRAG.generation.llms import build_llm
@@ -105,10 +105,8 @@ def initialize_pipeline():
             vectorstore = build_database(chunked_documents, embedding_model)
             save_faiss_index(vectorstore, index_name)
 
-    if retriever_type == "similarity":
-        retriever = build_similarity_retriever(vectorstore)
-    else:
-        retriever = build_mmr_retriever(vectorstore)
+    retriever = build_retriever(vectorstore, search_type=retriever_type)
+
 
     st.session_state.vectorstore = vectorstore
     st.session_state.retriever = retriever
