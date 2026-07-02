@@ -130,11 +130,10 @@ def save_evaluation_results(results, output_file):
         raise
 
 
-async def evaluate_rag_response(dataset, pipeline, metric_name, ragas_llm="cohere", ragas_embedding="miniLM", reference_answer=None):
-    logger.info("Running RAGAS experiment | metric=%s | llm=%s | embedding=%s", metric_name, ragas_llm, ragas_embedding)
+async def evaluate_rag_response(dataset, pipeline, metric_name, reference_answer=None):
+    logger.info("Running RAGAS experiment | metric=%s ", metric_name)
 
     try:
-        #evaluator_llm = llm_factory(model=ragas_llm, client=build_llm(ragas_llm))
         litellm_async_client = LiteLLMAsync(
             base_url="http://localhost:11434/v1",
             api_key="ollama"
