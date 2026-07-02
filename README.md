@@ -148,13 +148,12 @@ The system follows this workflow:
 
 ## PDF ETL Pipeline
 
-The ingestion system uses a lightweight ETL pipeline for converting raw PDFs into reusable structured artifacts.
+The ingestion system uses [docling](https://github.com/docling-project) converting raw PDFs into reusable structured artifacts.
 
 The ETL process:
 
 - extracts text from PDFs
-- removes noisy sections and formatting artifacts
-- repairs section structure
+- extracts images and tables from document
 - chunks content using semantic headers
 - stores processed outputs for reuse
 
@@ -237,11 +236,11 @@ Handles document ingestion and preprocessing.
 
 #### `pdf_etl.py`
 
-Runs the PDF ETL pipeline and manages processed artifacts.
+Runs the PDF ETL pipeline using docling and manages processed artifacts.
 
 #### `pdf_cleaning.py`
 
-Cleans extracted PDF text and repairs section structure.
+~~Cleans extracted PDF text and repairs section structure.~~ (Not used in this version)
 
 #### `loaders.py`
 
@@ -369,6 +368,7 @@ Core technologies used in this project:
 - Cohere API
 - OpenAI API
 - Ollama
+- Docling
 - MLflow
 - sentence-transformers
 
@@ -436,13 +436,10 @@ Then open `http://localhost:5000` in your browser.
 Potential extensions include:
 
 - hybrid retrieval with BM25 + dense search
-- OCR support for scanned PDFs
-- automatic answer grading
 - metadata-aware retrieval
 - conversational memory
 - benchmark evaluation suites
 - cloud deployment architecture
-- async ingestion pipelines
 
 ---
 
