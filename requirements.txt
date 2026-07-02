@@ -18,3 +18,5 @@ matplotlib
 streamlit
 dotenv
 mlflow
+docling
+ragas

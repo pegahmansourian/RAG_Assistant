@@ -5,7 +5,7 @@ from pathlib import Path
 from langchain_core.documents import Document
 
 from ResearchRAG.config import PROCESSED_DIR, SUPPORTED_PDF_GLOB, RAW_PDF_DIR
-from ResearchRAG.ingestion.pdf_etl import run_pdf_etl_for_file
+from ResearchRAG.ingestion.pdf_etl import run_pdf_etl_for_file, run_pdf_docling_etl_for_file
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +30,15 @@ def parse_pdf(pdf_path):
         for idx, chunk in enumerate(payload.get("chunks", [])):
             documents.append(
                 Document(
-                    page_content=chunk.get("content", ""),
+                    page_content=chunk.get("text", ""),
                     metadata={
                         "source": payload.get("source", str(pdf_file)),
                         "title": payload.get("title", pdf_file.stem),
                         "authors": payload.get("authors", []),
-                        "section_header": chunk.get("header", "Document"),
+                        "section_header": chunk.get("heading", "Document"),
                         "chunk_id": idx,
+                        "images": chunk.get("images", []),
+                        "tables": chunk.get("tables", []),
                     },
                 )
             )
@@ -78,7 +80,8 @@ def sync_parsed_pdfs():
 
             if not json_path.exists():
                 logger.info("Running ETL for missing PDF: %s", pdf_path.name)
-                run_pdf_etl_for_file(pdf_path)
+                run_pdf_docling_etl_for_file(pdf_path)
+                #run_pdf_etl_for_file(pdf_path)
 
         logger.info("PDF synchronization completed")
 
